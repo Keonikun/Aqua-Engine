@@ -1,0 +1,19 @@
+{
+  "name": "aqua-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "bake:lights": "node tools/mapcompiler/bakeLighting.js",
+    "textures:variants": "python tools/texture_variants.py",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "three": "^0.184.0"
+  }
+}

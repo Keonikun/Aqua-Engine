@@ -1,0 +1,55 @@
+{
+  "schema": "aqua.material_manifest.v1",
+  "materials": {
+    "asphalt": {
+      "diffuse": "/assets/textures/asphalt/asphalt_diff.jpg",
+      "arm": "/assets/textures/asphalt/asphalt_arm.jpg",
+      "normal": "/assets/textures/asphalt/asphalt_nor.jpg"
+    },
+    "concrete_floor_damaged": {
+      "diffuse": "/assets/textures/concrete_floor_damaged/concrete_floor_damaged_diff.jpg",
+      "arm": "/assets/textures/concrete_floor_damaged/concrete_floor_damaged_arm.jpg",
+      "normal": "/assets/textures/concrete_floor_damaged/concrete_floor_damaged_nor.jpg"
+    },
+    "concrete_layers": {
+      "diffuse": "/assets/textures/concrete_layers/concrete_layers_diff.jpg",
+      "arm": "/assets/textures/concrete_layers/concrete_layers_arm.jpg",
+      "normal": "/assets/textures/concrete_layers/concrete_layers_nor.jpg"
+    },
+    "forest_ground": {
+      "diffuse": "/assets/textures/forest_ground/forrest_ground_diff.jpg",
+      "arm": "/assets/textures/forest_ground/forrest_ground_arm.jpg",
+      "normal": "/assets/textures/forest_ground/forrest_ground_nor.jpg"
+    },
+    "gray_rocks": {
+      "diffuse": "/assets/textures/gray_rocks/gray_rocks_diff.jpg",
+      "arm": "/assets/textures/gray_rocks/grey_rocks_arm.jpg",
+      "normal": "/assets/textures/gray_rocks/gray_rocks_nor.jpg"
+    },
+    "slumped_mortar_brick": {
+      "diffuse": "/assets/textures/slumped_mortar_brick/slumped_mortar_brick_diff.jpg",
+      "arm": "/assets/textures/slumped_mortar_brick/slumped_mortar_brick_arm.jpg",
+      "normal": "/assets/textures/slumped_mortar_brick/slumped_mortar_brick_nor.jpg"
+    },
+    "stained_pine": {
+      "diffuse": "/assets/textures/stained_pine/stained_pine_diff.jpg",
+      "arm": "/assets/textures/stained_pine/stained_pine_arm.jpg",
+      "normal": "/assets/textures/stained_pine/stained_pine_nor.jpg"
+    },
+    "stone_tiles": {
+      "diffuse": "/assets/textures/stone_tiles/stone_tiles_diff.jpg",
+      "arm": "/assets/textures/stone_tiles/stone_tiles_arm.jpg",
+      "normal": "/assets/textures/stone_tiles/stone_tiles_nor.jpg"
+    },
+    "worn_corrugated_iron": {
+      "diffuse": "/assets/textures/worn_corrugated_iron/worn_corrugated_iron_diff.jpg",
+      "arm": "/assets/textures/worn_corrugated_iron/worn_corrugated_iron_arm.jpg",
+      "normal": "/assets/textures/worn_corrugated_iron/worn_corrugated_iron_nor.jpg"
+    },
+    "worn_mossy_plasterwall": {
+      "diffuse": "/assets/textures/worn_mossy_plasterwall/worn_mossy_plasterwall_diff.jpg",
+      "arm": "/assets/textures/worn_mossy_plasterwall/worn_mossy_plasterwall_arm.jpg",
+      "normal": "/assets/textures/worn_mossy_plasterwall/worn_mossy_plasterwall_nor.jpg"
+    }
+  }
+}

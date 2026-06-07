@@ -1,0 +1,116 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Aqua Engine brush datapoint sample"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Aqua Brush Test Map",
+      "nodes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "info_player_start",
+      "translation": [0, 0.1, 4],
+      "extras": {
+        "aqua_entity": "info_player_start"
+      }
+    },
+    {
+      "name": "brush_floor",
+      "translation": [0, -0.06, 0],
+      "scale": [24, 0.12, 24],
+      "extras": {
+        "aqua_brush_type": "plane",
+        "aqua_color": "#29313a"
+      }
+    },
+    {
+      "name": "brush_back_wall",
+      "translation": [0, 1, -8],
+      "scale": [12, 2, 0.5],
+      "extras": {
+        "aqua_brush_type": "box",
+        "aqua_color": "#7f8a8f"
+      }
+    },
+    {
+      "name": "brush_left_wall",
+      "translation": [-6, 1, -2],
+      "scale": [0.5, 2, 8],
+      "extras": {
+        "aqua_brush_type": "box",
+        "aqua_color": "#7f8a8f"
+      }
+    },
+    {
+      "name": "brush_right_wall",
+      "translation": [6, 1, -2],
+      "scale": [0.5, 2, 8],
+      "extras": {
+        "aqua_brush_type": "box",
+        "aqua_color": "#7f8a8f"
+      }
+    },
+    {
+      "name": "brush_jump_box",
+      "translation": [4, 0.5, -3],
+      "scale": [2, 1, 2],
+      "extras": {
+        "aqua_brush_type": "box",
+        "aqua_color": "#d7ad5f"
+      }
+    },
+    {
+      "name": "brush_low_step",
+      "translation": [0, 0.15, 3],
+      "scale": [2.5, 0.3, 1.2],
+      "extras": {
+        "aqua_brush_type": "box",
+        "aqua_color": "#7f8a8f"
+      }
+    },
+    {
+      "name": "brush_mid_step",
+      "translation": [-2.2, 0.3, 3],
+      "scale": [1, 0.6, 1.2],
+      "extras": {
+        "aqua_brush_type": "box",
+        "aqua_color": "#7f8a8f"
+      }
+    },
+    {
+      "name": "brush_ceiling_test",
+      "translation": [-4, 1.85, 1],
+      "scale": [2.5, 0.35, 2.5],
+      "extras": {
+        "aqua_brush_type": "box",
+        "aqua_color": "#d7ad5f"
+      }
+    },
+    {
+      "name": "brush_ramp",
+      "translation": [2.5, 0.5, 2.5],
+      "scale": [3, 1, 2],
+      "extras": {
+        "aqua_brush_type": "ramp",
+        "aqua_color": "#7f8a8f"
+      }
+    },
+    {
+      "name": "brush_terrain_test",
+      "translation": [-2.5, 0.04, 7],
+      "scale": [5, 1, 4],
+      "extras": {
+        "aqua_brush_type": "terrain",
+        "aqua_color": "#4f765d",
+        "aqua_segments_x": 12,
+        "aqua_segments_z": 10,
+        "aqua_height_mode": "demo_wave",
+        "aqua_max_snap_depth": 0.55
+      }
+    }
+  ]
+}
