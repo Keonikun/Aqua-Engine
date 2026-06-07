@@ -68,7 +68,7 @@ The player uses a Source-like kinematic hull controller rather than a dynamic ri
 
 ## Materials
 
-The settings panel keeps shader graphics quality and texture quality separate. Texture quality updates shared texture sampler settings and anisotropy, so it still affects baked world surfaces because baked materials reuse the same diffuse texture objects. The material manifest also accepts optional texture variant objects such as `{ "low": "...", "medium": "...", "high": "..." }`; switching texture quality will swap existing materials to the matching variant when those paths are present.
+The settings panel keeps shader graphics quality and texture quality separate. Texture quality updates shared texture sampler settings and anisotropy, so it still affects baked world surfaces because baked materials reuse the same diffuse texture objects. For string texture paths, `High` uses the original JPG, `Medium` uses `_medium.jpg`, `Low` uses `_low.jpg`, and `Very Low` uses `_very_low.jpg`. The material manifest also accepts optional texture variant objects such as `{ "very_low": "...", "low": "...", "medium": "...", "high": "..." }`; switching texture quality will swap existing materials to the matching variant when those paths are present.
 
 Use `npm run textures:variants -- <folder>` to generate `_medium` 512x512, `_low` 256x256, and `_very_low` 128x128 JPG variants for texture folders.
 

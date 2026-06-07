@@ -53,6 +53,7 @@ export class SettingsMenu {
       <label>
         <span>Textures</span>
         <select data-setting="textures">
+          <option value="very_low">Very Low</option>
           <option value="low">Low</option>
           <option value="medium" selected>Medium</option>
           <option value="high">High</option>

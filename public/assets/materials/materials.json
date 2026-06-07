@@ -23,7 +23,7 @@
     },
     "gray_rocks": {
       "diffuse": "/assets/textures/gray_rocks/gray_rocks_diff.jpg",
-      "arm": "/assets/textures/gray_rocks/grey_rocks_arm.jpg",
+      "arm": "/assets/textures/gray_rocks/gray_rocks_arm.jpg",
       "normal": "/assets/textures/gray_rocks/gray_rocks_nor.jpg"
     },
     "slumped_mortar_brick": {

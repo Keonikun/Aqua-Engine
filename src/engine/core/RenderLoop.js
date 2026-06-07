@@ -8,9 +8,11 @@ export class RenderLoop {
     this.lastRenderTime = 0
     this.elapsedTime = 0
     this.running = false
-    this.fpsCap = 60
-    this.frameInterval = 1 / this.fpsCap
+    this.fpsCap = 0
+    this.frameInterval = 0
     this.frameAccumulator = 0
+    this.displayFrameInterval = 1 / 60
+    this.displayFrameSmoothing = 0.08
   }
 
   start() {
@@ -40,6 +42,7 @@ export class RenderLoop {
 
     const deltaTime = Math.min((time - this.lastTime) / 1000, 0.1)
     this.lastTime = time
+    this.updateDisplayFrameInterval(deltaTime)
     this.frameAccumulator += deltaTime
 
     if (this.fpsCap === 0 || this.frameAccumulator + 0.0005 >= this.frameInterval) {
@@ -67,12 +70,22 @@ export class RenderLoop {
           updateTimeMs: renderStart - updateStart,
           renderTimeMs: renderEnd - renderStart,
           frameCpuTimeMs: renderEnd - updateStart,
-          fpsCap: this.fpsCap,
+        frameBudgetMs: this.getFrameBudgetMs(),
+        fpsCap: this.fpsCap,
         })
       }
     }
 
     this.animationFrameId = window.requestAnimationFrame((nextTime) => this.tick(nextTime))
+  }
+
+  updateDisplayFrameInterval(deltaTime) {
+    if (!Number.isFinite(deltaTime) || deltaTime <= 0 || deltaTime >= 0.1) return
+    this.displayFrameInterval += (deltaTime - this.displayFrameInterval) * this.displayFrameSmoothing
+  }
+
+  getFrameBudgetMs() {
+    return (this.fpsCap > 0 ? this.frameInterval : this.displayFrameInterval) * 1000
   }
 
   setFpsCap(fpsCap) {

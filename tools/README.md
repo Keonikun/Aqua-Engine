@@ -13,7 +13,7 @@ The runtime should not depend on these modules directly.
 Requires Python with Pillow installed:
 
 ```sh
-python -m pip install pillow
+npm run tools:install
 ```
 
 Create adjacent variants for every JPG in a folder:

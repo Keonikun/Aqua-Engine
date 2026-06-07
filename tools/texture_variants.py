@@ -6,7 +6,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from PIL import Image, ImageOps
+try:
+    from PIL import Image, ImageOps
+except ModuleNotFoundError as error:
+    raise SystemExit(
+        "Missing Pillow. Install tool dependencies with:\n"
+        "  python -m pip install -r tools/requirements.txt\n"
+        "or:\n"
+        "  npm run tools:install\n"
+    ) from error
 
 
 VARIANTS = {

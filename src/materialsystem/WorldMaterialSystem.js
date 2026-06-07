@@ -27,6 +27,12 @@ const QUALITY_PRESETS = {
 }
 
 const TEXTURE_QUALITY_PRESETS = {
+  very_low: {
+    anisotropy: 1,
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+    generateMipmaps: false,
+  },
   low: {
     anisotropy: 1,
     minFilter: THREE.LinearFilter,
@@ -404,7 +410,7 @@ function createTextureSlots(definition, repeat) {
 
 function resolveTextureUrl(source, textureQuality) {
   if (typeof source === 'string') {
-    return source
+    return getTextureVariantUrl(source, textureQuality)
   }
 
   if (!source || typeof source !== 'object') {
@@ -412,12 +418,53 @@ function resolveTextureUrl(source, textureQuality) {
   }
 
   return source[textureQuality] ||
-    source.medium ||
     source.high ||
+    source.medium ||
     source.low ||
+    source.very_low ||
+    source.veryLow ||
     source.url ||
     source.default ||
     ''
+}
+
+function getTextureVariantUrl(url, textureQuality) {
+  if (textureQuality === 'high') {
+    return url
+  }
+
+  const suffix = getTextureVariantSuffix(textureQuality)
+
+  if (!suffix) {
+    return url
+  }
+
+  const queryIndex = url.search(/[?#]/)
+  const pathPart = queryIndex === -1 ? url : url.slice(0, queryIndex)
+  const queryPart = queryIndex === -1 ? '' : url.slice(queryIndex)
+  const dotIndex = pathPart.lastIndexOf('.')
+
+  if (dotIndex === -1) {
+    return `${pathPart}_${suffix}${queryPart}`
+  }
+
+  return `${pathPart.slice(0, dotIndex)}_${suffix}${pathPart.slice(dotIndex)}${queryPart}`
+}
+
+function getTextureVariantSuffix(textureQuality) {
+  if (textureQuality === 'medium') {
+    return 'medium'
+  }
+
+  if (textureQuality === 'low') {
+    return 'low'
+  }
+
+  if (textureQuality === 'very_low') {
+    return 'very_low'
+  }
+
+  return null
 }
 
 function applyTextureRepeat(texture, repeat) {
