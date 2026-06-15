@@ -1,4 +1,11 @@
 import './style.css'
-import { bootClient } from './client/bootClient.js'
+import { bootClient } from './bootClient.js'
 
-await bootClient(document.querySelector('#app'))
+const engine = await bootClient(document.querySelector('#app'))
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    engine.stop()
+    window.aquaEngine = null
+  })
+}

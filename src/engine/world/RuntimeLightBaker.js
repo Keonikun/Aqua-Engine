@@ -20,22 +20,31 @@ const DEFAULT_SETTINGS = {
 
 export async function bakeRuntimeLighting({
   meshes,
+  shadowMeshes,
   sourceScene,
   settings: overrides = {},
   onProgress = () => {},
 } = {}) {
   const settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...overrides })
   const bakeMeshes = (meshes || []).filter((mesh) => mesh?.isMesh && mesh.geometry?.getAttribute('position'))
+  const bakeMeshSet = new Set(bakeMeshes)
+  const shadowSourceMeshes = Array.isArray(shadowMeshes) && shadowMeshes.length > 0 ? shadowMeshes : bakeMeshes
+  const shadowOnlyMeshes = shadowSourceMeshes.filter((mesh) =>
+    mesh?.isMesh &&
+    mesh.geometry?.getAttribute('position') &&
+    !bakeMeshSet.has(mesh)
+  )
 
   onProgress({
     stage: 'lighting:collect',
     label: 'Collecting bake samples',
     progress: 0,
-    detail: `${bakeMeshes.length} surface(s)`,
+    detail: `${bakeMeshes.length} receiver(s), ${shadowOnlyMeshes.length} shadow caster(s)`,
   })
 
   const surfaces = bakeMeshes.map((mesh) => createBakeSurface(mesh))
-  const triangles = buildTriangles(surfaces)
+  const shadowSurfaces = shadowOnlyMeshes.map((mesh) => createBakeSurface(mesh))
+  const triangles = buildTriangles([...surfaces, ...shadowSurfaces])
   const lights = collectRuntimeLights(sourceScene, settings)
   const sampleCount = surfaces.reduce((sum, surface) => sum + surface.worldPositions.length, 0)
 
@@ -193,10 +202,15 @@ function collectRuntimeLights(sourceScene, settings) {
 
   sourceScene?.updateMatrixWorld(true)
   sourceScene?.traverse((object) => {
-    const extrasLight = createLightFromExtras(object)
+    const extrasType = getString(object.userData, 'aqua_light_type', 'aquaLightType')?.toLowerCase()
 
-    if (extrasLight) {
-      lights.push(extrasLight)
+    if (extrasType === 'ambient') {
+      const extrasLight = createLightFromExtras(object)
+
+      if (extrasLight) {
+        lights.push(extrasLight)
+      }
+
       return
     }
 
@@ -204,6 +218,13 @@ function collectRuntimeLights(sourceScene, settings) {
 
     if (objectLight) {
       lights.push(objectLight)
+      return
+    }
+
+    const extrasLight = createLightFromExtras(object)
+
+    if (extrasLight) {
+      lights.push(extrasLight)
     }
   })
 
@@ -513,9 +534,14 @@ async function computeBounceLighting({ surfaces, triangles, settings, onProgress
 
 function seedPatchEmission(triangles, source, settings) {
   for (const triangle of triangles) {
-    const values = source === 'direct'
-      ? triangle.indices.map((index) => triangle.surface.direct[index])
-      : triangle.indices.map((index) => source.get(triangle.surface)[index])
+    const sourceValues = source === 'direct' ? triangle.surface.direct : source.get(triangle.surface)
+
+    if (!sourceValues) {
+      triangle.emit.set(0, 0, 0)
+      continue
+    }
+
+    const values = triangle.indices.map((index) => sourceValues[index])
     const average = new THREE.Vector3()
 
     for (const value of values) {

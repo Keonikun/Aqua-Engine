@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_lamppost",
+  "displayName": "prop_lamppost",
+  "model": "prop_lamppost.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      58.451111,
+      0.0,
+      3.247284
+    ],
+    "engine": [
+      58.451111,
+      3.247284,
+      -0.0
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        58.203011,
+        -0.453364,
+        3.073574
+      ],
+      "max": [
+        58.699211,
+        0.2481,
+        6.21668
+      ]
+    },
+    "engine": {
+      "min": [
+        58.203011,
+        3.073574,
+        -0.2481
+      ],
+      "max": [
+        58.699211,
+        6.21668,
+        0.453364
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_lamppost",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          58.451111,
+          0.0,
+          3.247284
+        ],
+        "engine": [
+          58.451111,
+          3.247284,
+          -0.0
+        ]
+      }
+    },
+    {
+      "name": "brush_box.017",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          58.451111,
+          0.0,
+          4.435548
+        ],
+        "engine": [
+          58.451111,
+          4.435548,
+          -0.0
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

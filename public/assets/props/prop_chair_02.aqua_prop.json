@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_chair_02",
+  "displayName": "prop_chair_02",
+  "model": "prop_chair_02.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      27.601913,
+      1e-06,
+      0.0
+    ],
+    "engine": [
+      27.601913,
+      0.0,
+      -1e-06
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        27.311895,
+        -0.305381,
+        0.001653
+      ],
+      "max": [
+        27.883749,
+        0.271324,
+        1.02324
+      ]
+    },
+    "engine": {
+      "min": [
+        27.311895,
+        0.001653,
+        -0.271324
+      ],
+      "max": [
+        27.883749,
+        1.02324,
+        0.305381
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_chair_02",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          27.601913,
+          1e-06,
+          0.0
+        ],
+        "engine": [
+          27.601913,
+          0.0,
+          -1e-06
+        ]
+      }
+    },
+    {
+      "name": "brush_box.011",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          27.601913,
+          1e-06,
+          0.501653
+        ],
+        "engine": [
+          27.601913,
+          0.501653,
+          -1e-06
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

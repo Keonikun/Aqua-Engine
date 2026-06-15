@@ -1,0 +1,69 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_planks_01",
+  "displayName": "prop_planks_01",
+  "model": "prop_planks_01.glb",
+  "static": true,
+  "collision": {
+    "type": "none",
+    "source": "aqua_collision_kind",
+    "meshCount": 0
+  },
+  "pivot": {
+    "blender": [
+      68.192963,
+      0.0,
+      4.132562
+    ],
+    "engine": [
+      68.192963,
+      4.132562,
+      -0.0
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        67.640625,
+        -0.044306,
+        3.378323
+      ],
+      "max": [
+        68.732025,
+        0.035839,
+        5.023874
+      ]
+    },
+    "engine": {
+      "min": [
+        67.640625,
+        3.378323,
+        -0.035839
+      ],
+      "max": [
+        68.732025,
+        5.023874,
+        0.044306
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_planks_01",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          68.192963,
+          0.0,
+          4.132562
+        ],
+        "engine": [
+          68.192963,
+          4.132562,
+          -0.0
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

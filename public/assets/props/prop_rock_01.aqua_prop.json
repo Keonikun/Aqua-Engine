@@ -1,0 +1,69 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_rock_01",
+  "displayName": "prop_rock_01",
+  "model": "prop_rock_01.glb",
+  "static": true,
+  "collision": {
+    "type": "none",
+    "source": "aqua_collision_kind",
+    "meshCount": 0
+  },
+  "pivot": {
+    "blender": [
+      58.451111,
+      1e-06,
+      0.0
+    ],
+    "engine": [
+      58.451111,
+      0.0,
+      -1e-06
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        57.484829,
+        -1.080684,
+        -0.000449
+      ],
+      "max": [
+        59.75473,
+        1.167636,
+        1.226994
+      ]
+    },
+    "engine": {
+      "min": [
+        57.484829,
+        -0.000449,
+        -1.167636
+      ],
+      "max": [
+        59.75473,
+        1.226994,
+        1.080684
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_rock_01",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          58.451111,
+          1e-06,
+          0.0
+        ],
+        "engine": [
+          58.451111,
+          0.0,
+          -1e-06
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

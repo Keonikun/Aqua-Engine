@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_telepole",
+  "displayName": "prop_telepole",
+  "model": "prop_telepole.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      79.428871,
+      -0.026845,
+      5.088904
+    ],
+    "engine": [
+      79.428871,
+      5.088904,
+      0.026845
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        78.650116,
+        -0.896801,
+        5.088904
+      ],
+      "max": [
+        80.293083,
+        0.746158,
+        14.039993
+      ]
+    },
+    "engine": {
+      "min": [
+        78.650116,
+        5.088904,
+        -0.746158
+      ],
+      "max": [
+        80.293083,
+        14.039993,
+        0.896801
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_telepole",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          79.428871,
+          -0.026845,
+          5.088904
+        ],
+        "engine": [
+          79.428871,
+          5.088904,
+          0.026845
+        ]
+      }
+    },
+    {
+      "name": "brush_box.014",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          79.428871,
+          -0.026845,
+          9.544716
+        ],
+        "engine": [
+          79.428871,
+          9.544716,
+          0.026845
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

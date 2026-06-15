@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create lower-resolution JPG texture variants for Aqua Engine assets."""
+"""Create lower-resolution JPG texture folders for Aqua Engine assets."""
 
 from __future__ import annotations
 
@@ -17,22 +17,24 @@ except ModuleNotFoundError as error:
     ) from error
 
 
+SOURCE_SIZE_FOLDER = "1024x1024"
 VARIANTS = {
-    "medium": 512,
-    "low": 256,
-    "very_low": 128,
+    "512x512": 512,
+    "256x256": 256,
+    "128x128": 128,
 }
-GENERATED_SUFFIXES = tuple(f"_{name}" for name in VARIANTS)
+GENERATED_SUFFIXES = ("_medium", "_low", "_very_low")
 
 
 def main() -> None:
     args = parse_args()
-    source_dir = Path(args.folder).resolve()
+    requested_dir = Path(args.folder).resolve()
+    source_dir = resolve_source_dir(requested_dir, args.source_size_folder)
 
     if not source_dir.is_dir():
         raise SystemExit(f"Texture folder does not exist: {source_dir}")
 
-    output_dir = Path(args.output_dir).resolve() if args.output_dir else None
+    output_root = Path(args.output_dir).resolve() if args.output_dir else source_dir.parent
     sources = find_jpgs(source_dir, recursive=args.recursive)
     processed = 0
     written = 0
@@ -45,8 +47,8 @@ def main() -> None:
 
         processed += 1
 
-        for variant_name, size in VARIANTS.items():
-            target_path = get_target_path(source_path, source_dir, output_dir, variant_name)
+        for folder_name, size in VARIANTS.items():
+            target_path = get_target_path(source_path, source_dir, output_root, folder_name)
 
             if target_path.exists() and not args.overwrite:
                 skipped += 1
@@ -62,6 +64,8 @@ def main() -> None:
             )
             written += 1
 
+    print(f"Source folder: {source_dir}")
+    print(f"Output root: {output_root}")
     print(f"Scanned {len(sources)} JPG file(s).")
     print(f"Processed {processed} source texture(s).")
     print(f"Wrote {written} variant file(s).")
@@ -70,23 +74,29 @@ def main() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create 512x512, 256x256, and 128x128 JPG variants for each JPG in a folder.",
+        description="Create 512x512, 256x256, and 128x128 texture folders from source JPGs.",
     )
 
     parser.add_argument(
         "folder",
-        help="Folder containing JPG textures.",
+        help="Texture root or source-size folder. If the root contains 1024x1024, that folder is used.",
     )
     parser.add_argument(
         "-o",
         "--output-dir",
-        help="Optional output directory. Defaults to writing variants beside each source JPG.",
+        help="Optional texture root for generated size folders. Defaults to the source folder parent.",
     )
     parser.add_argument(
         "-r",
         "--recursive",
-        action="store_true",
-        help="Walk nested folders.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Walk nested folders. Default: true.",
+    )
+    parser.add_argument(
+        "--source-size-folder",
+        default=SOURCE_SIZE_FOLDER,
+        help=f"Source texture size folder name. Default: {SOURCE_SIZE_FOLDER}.",
     )
     parser.add_argument(
         "--overwrite",
@@ -111,6 +121,15 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def resolve_source_dir(folder: Path, source_size_folder: str) -> Path:
+    nested_source_dir = folder / source_size_folder
+
+    if folder.name != source_size_folder and nested_source_dir.is_dir():
+        return nested_source_dir
+
+    return folder
+
+
 def find_jpgs(folder: Path, recursive: bool) -> list[Path]:
     pattern = "**/*" if recursive else "*"
 
@@ -125,14 +144,9 @@ def is_generated_variant(path: Path) -> bool:
     return path.stem.endswith(GENERATED_SUFFIXES)
 
 
-def get_target_path(source_path: Path, source_dir: Path, output_dir: Path | None, variant_name: str) -> Path:
-    filename = f"{source_path.stem}_{variant_name}.jpg"
-
-    if output_dir is None:
-        return source_path.with_name(filename)
-
+def get_target_path(source_path: Path, source_dir: Path, output_root: Path, folder_name: str) -> Path:
     relative_parent = source_path.parent.relative_to(source_dir)
-    return output_dir / relative_parent / filename
+    return output_root / folder_name / relative_parent / source_path.name
 
 
 def write_variant(source_path: Path, target_path: Path, size: int, fit: str, quality: int) -> None:

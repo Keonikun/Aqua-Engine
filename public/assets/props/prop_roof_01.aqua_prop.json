@@ -1,0 +1,69 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_roof_01",
+  "displayName": "prop_roof_01",
+  "model": "prop_roof_01.glb",
+  "static": true,
+  "collision": {
+    "type": "none",
+    "source": "aqua_collision_kind",
+    "meshCount": 0
+  },
+  "pivot": {
+    "blender": [
+      98.262001,
+      1e-06,
+      0.0
+    ],
+    "engine": [
+      98.262001,
+      0.0,
+      -1e-06
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        94.913109,
+        -4.015095,
+        -0.0
+      ],
+      "max": [
+        101.610886,
+        4.015097,
+        1.913453
+      ]
+    },
+    "engine": {
+      "min": [
+        94.913109,
+        -0.0,
+        -4.015097
+      ],
+      "max": [
+        101.610886,
+        1.913453,
+        4.015095
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_roof_01",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          98.262001,
+          1e-06,
+          0.0
+        ],
+        "engine": [
+          98.262001,
+          0.0,
+          -1e-06
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

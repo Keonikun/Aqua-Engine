@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_stairs_01",
+  "displayName": "prop_stairs_01",
+  "model": "prop_stairs_01.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      99.919342,
+      -2.4783,
+      6.31647
+    ],
+    "engine": [
+      99.919342,
+      6.31647,
+      2.4783
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        99.103424,
+        -2.816773,
+        6.316469
+      ],
+      "max": [
+        100.73526,
+        1.502889,
+        8.615379
+      ]
+    },
+    "engine": {
+      "min": [
+        99.103424,
+        6.316469,
+        -1.502889
+      ],
+      "max": [
+        100.73526,
+        8.615379,
+        2.816773
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_stairs_01",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          99.919342,
+          -2.4783,
+          6.31647
+        ],
+        "engine": [
+          99.919342,
+          6.31647,
+          2.4783
+        ]
+      }
+    },
+    {
+      "name": "brush_ramp",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          99.931198,
+          -0.837905,
+          7.465924
+        ],
+        "engine": [
+          99.931198,
+          7.465924,
+          0.837905
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

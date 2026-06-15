@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_door_01",
+  "displayName": "prop_door_01",
+  "model": "prop_door_01.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      52.534,
+      0.0,
+      3.247284
+    ],
+    "engine": [
+      52.534,
+      3.247284,
+      -0.0
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        51.442642,
+        -0.086194,
+        3.247284
+      ],
+      "max": [
+        52.534504,
+        0.128561,
+        5.539006
+      ]
+    },
+    "engine": {
+      "min": [
+        51.442642,
+        3.247284,
+        -0.128561
+      ],
+      "max": [
+        52.534504,
+        5.539006,
+        0.086194
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_door_01",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          52.534,
+          0.0,
+          3.247284
+        ],
+        "engine": [
+          52.534,
+          3.247284,
+          -0.0
+        ]
+      }
+    },
+    {
+      "name": "brush_box.001",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          51.989994,
+          0.024277,
+          4.396637
+        ],
+        "engine": [
+          51.989994,
+          4.396637,
+          -0.024277
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

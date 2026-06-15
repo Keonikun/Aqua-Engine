@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_tankard",
+  "displayName": "prop_tankard",
+  "model": "prop_tankard.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      61.698395,
+      0.0,
+      3.247284
+    ],
+    "engine": [
+      61.698395,
+      3.247284,
+      -0.0
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        61.205246,
+        -0.404873,
+        3.247283
+      ],
+      "max": [
+        62.058258,
+        0.404874,
+        5.950262
+      ]
+    },
+    "engine": {
+      "min": [
+        61.205246,
+        3.247283,
+        -0.404874
+      ],
+      "max": [
+        62.058258,
+        5.950262,
+        0.404873
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_tankard",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          61.698395,
+          0.0,
+          3.247284
+        ],
+        "engine": [
+          61.698395,
+          3.247284,
+          -0.0
+        ]
+      }
+    },
+    {
+      "name": "brush_box.018",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          61.632298,
+          0.0,
+          4.512734
+        ],
+        "engine": [
+          61.632298,
+          4.512734,
+          -0.0
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_beam",
+  "displayName": "prop_beam",
+  "model": "prop_beam.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      71.440247,
+      1e-06,
+      0.0
+    ],
+    "engine": [
+      71.440247,
+      0.0,
+      -1e-06
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        71.310883,
+        -1.000004,
+        -0.129363
+      ],
+      "max": [
+        71.569611,
+        1.000005,
+        0.129363
+      ]
+    },
+    "engine": {
+      "min": [
+        71.310883,
+        -0.129363,
+        -1.000005
+      ],
+      "max": [
+        71.569611,
+        0.129363,
+        1.000004
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_beam",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          71.440247,
+          1e-06,
+          0.0
+        ],
+        "engine": [
+          71.440247,
+          0.0,
+          -1e-06
+        ]
+      }
+    },
+    {
+      "name": "brush_box.006",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          71.440247,
+          1e-06,
+          0.0
+        ],
+        "engine": [
+          71.440247,
+          0.0,
+          -1e-06
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

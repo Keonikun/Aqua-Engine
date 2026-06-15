@@ -1,0 +1,69 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_well",
+  "displayName": "prop_well",
+  "model": "prop_well.glb",
+  "static": true,
+  "collision": {
+    "type": "none",
+    "source": "aqua_collision_kind",
+    "meshCount": 0
+  },
+  "pivot": {
+    "blender": [
+      51.956543,
+      1e-06,
+      0.0
+    ],
+    "engine": [
+      51.956543,
+      0.0,
+      -1e-06
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        50.925774,
+        -1.029218,
+        -0.000247
+      ],
+      "max": [
+        52.98761,
+        1.032618,
+        2.703903
+      ]
+    },
+    "engine": {
+      "min": [
+        50.925774,
+        -0.000247,
+        -1.032618
+      ],
+      "max": [
+        52.98761,
+        2.703903,
+        1.029218
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_well",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          51.956543,
+          1e-06,
+          0.0
+        ],
+        "engine": [
+          51.956543,
+          0.0,
+          -1e-06
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

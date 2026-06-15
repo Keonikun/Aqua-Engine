@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_stairs_railing",
+  "displayName": "prop_stairs_railing",
+  "model": "prop_stairs_railing.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      102.517319,
+      -2.050266,
+      6.388208
+    ],
+    "engine": [
+      102.517319,
+      6.388208,
+      2.050266
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        102.316338,
+        -2.478301,
+        6.212457
+      ],
+      "max": [
+        102.540047,
+        2.320302,
+        10.051257
+      ]
+    },
+    "engine": {
+      "min": [
+        102.316338,
+        6.212457,
+        -2.320302
+      ],
+      "max": [
+        102.540047,
+        10.051257,
+        2.478301
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_stairs_railing",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          102.517319,
+          -2.050266,
+          6.388208
+        ],
+        "engine": [
+          102.517319,
+          6.388208,
+          2.050266
+        ]
+      }
+    },
+    {
+      "name": "brush_box.013",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          102.428192,
+          -0.07845,
+          8.131857
+        ],
+        "engine": [
+          102.428192,
+          8.131857,
+          0.07845
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

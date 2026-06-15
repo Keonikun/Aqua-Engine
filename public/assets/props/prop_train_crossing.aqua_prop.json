@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_train_crossing",
+  "displayName": "prop_train_crossing",
+  "model": "prop_train_crossing.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      86.928345,
+      -0.097737,
+      5.6415
+    ],
+    "engine": [
+      86.928345,
+      5.6415,
+      0.097737
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        86.701874,
+        -0.662803,
+        5.6415
+      ],
+      "max": [
+        88.143143,
+        0.096818,
+        12.712502
+      ]
+    },
+    "engine": {
+      "min": [
+        86.701874,
+        5.6415,
+        -0.096818
+      ],
+      "max": [
+        88.143143,
+        12.712502,
+        0.662803
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_train_crossing",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          86.928345,
+          -0.097737,
+          5.6415
+        ],
+        "engine": [
+          86.928345,
+          5.6415,
+          0.097737
+        ]
+      }
+    },
+    {
+      "name": "brush_box.015",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          86.928345,
+          -0.097737,
+          9.088447
+        ],
+        "engine": [
+          86.928345,
+          9.088447,
+          0.097737
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

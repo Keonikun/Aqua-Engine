@@ -1,0 +1,11 @@
+{
+  "schema": "aqua.skybox.v1",
+  "faces": {
+    "px": "px.png",
+    "nx": "nx.png",
+    "py": "py.png",
+    "ny": "ny.png",
+    "pz": "pz.png",
+    "nz": "nz.png"
+  }
+}

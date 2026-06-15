@@ -1,0 +1,47 @@
+{
+  "schema": "aqua.audio_manifest.v1",
+  "audio": {
+    "amb_rain": {
+      "src": "/assets/audio/ambient/amb_rain.mp3",
+      "displayName": "amb_rain",
+      "loop": true,
+      "volume": 1.0,
+      "tags": [
+        "aqua_asset"
+      ]
+    },
+    "door_open_01": {
+      "src": "/assets/audio/singlesources/door_open_01.mp3",
+      "displayName": "door_open_01",
+      "loop": false,
+      "volume": 1.0,
+      "tags": [
+        "aqua_asset"
+      ]
+    },
+    "door_close_01": {
+      "src": "/assets/audio/singlesources/door_close_01.mp3",
+      "displayName": "door_close_01",
+      "loop": false,
+      "volume": 1.0,
+      "tags": [
+        "aqua_asset"
+      ]
+    }
+  },
+  "footstepSets": {
+    "outdoor": {
+      "displayName": "Outdoor",
+      "clips": [
+        "/assets/audio/footsteps/outdoor/footstep_1.mp3",
+        "/assets/audio/footsteps/outdoor/footstep_2.mp3",
+        "/assets/audio/footsteps/outdoor/footstep_3.mp3"
+      ],
+      "volume": 0.55,
+      "tags": [
+        "footstep",
+        "outdoor"
+      ]
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_statue",
+  "displayName": "prop_statue",
+  "model": "prop_statue.glb",
+  "static": true,
+  "collision": {
+    "type": "none",
+    "source": "aqua_collision_kind",
+    "meshCount": 0
+  },
+  "pivot": {
+    "blender": [
+      55.203827,
+      1e-06,
+      0.0
+    ],
+    "engine": [
+      55.203827,
+      0.0,
+      -1e-06
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        54.79018,
+        -0.701107,
+        0.0
+      ],
+      "max": [
+        55.375214,
+        0.568703,
+        1.697874
+      ]
+    },
+    "engine": {
+      "min": [
+        54.79018,
+        0.0,
+        -0.568703
+      ],
+      "max": [
+        55.375214,
+        1.697874,
+        0.701107
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_statue",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          55.203827,
+          1e-06,
+          0.0
+        ],
+        "engine": [
+          55.203827,
+          0.0,
+          -1e-06
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

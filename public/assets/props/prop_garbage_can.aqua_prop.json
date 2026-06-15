@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_garbage_can",
+  "displayName": "prop_garbage_can",
+  "model": "prop_garbage_can.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "engine": [
+      0.0,
+      0.0,
+      -0.0
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        -0.227186,
+        -0.227186,
+        -0.0
+      ],
+      "max": [
+        0.227186,
+        0.227186,
+        0.7298
+      ]
+    },
+    "engine": {
+      "min": [
+        -0.227186,
+        -0.0,
+        -0.227186
+      ],
+      "max": [
+        0.227186,
+        0.7298,
+        0.227186
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_garbage_can",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "engine": [
+          0.0,
+          0.0,
+          -0.0
+        ]
+      }
+    },
+    {
+      "name": "brush_box.012",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          25.978271,
+          0.0,
+          1.981222
+        ],
+        "engine": [
+          25.978271,
+          1.981222,
+          -0.0
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

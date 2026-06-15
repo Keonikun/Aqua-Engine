@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import zlib from 'node:zlib'
 import * as THREE from 'three'
 
 const COMPONENT_TYPES = {
@@ -24,11 +25,12 @@ const ACCESSOR_COMPONENTS = {
 }
 
 const DEFAULT_SETTINGS = {
-  ambientColor: '#8aa7bd',
-  ambientIntensity: 0.22,
+  ambientColor: '#fcf6e7',
+  ambientIntensity: 1.22,
   sunColor: '#fff2d0',
   sunIntensity: 1.15,
   sunDirection: [-0.55, 0.82, 0.35],
+  authoredLightScale: 0.01,
   bounces: 1,
   bounceStrength: 0.42,
   exposure: 1,
@@ -37,10 +39,15 @@ const DEFAULT_SETTINGS = {
   normalBias: 0.025,
   shadowDistance: 96,
   patchDistance: 18,
+  lightmapTexelSize: 0.5,
+  lightmapMaxSize: 1024,
+  lightmapPadding: 2,
+  lightmapBleed: 4,
 }
 
 const DEFAULT_PLANE_LIGHTMAP_RESOLUTION = 1
 const MAX_PLANE_LIGHTMAP_SEGMENTS = 48
+const LIGHTMAP_SCHEMA = 'aqua.lightmap.v2'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -63,17 +70,18 @@ async function main() {
   const document = await loadGltfDocument(inputPath)
   const nodes = collectNodes(document)
   const surfaces = collectBakeSurfaces(document, nodes)
+  const shadowSurfaces = await collectPropShadowSurfaces(document, nodes, inputPath)
   const lights = collectLights(document, nodes, settings, cli.useDefaultLights)
 
   if (surfaces.length === 0) {
     throw new Error(`No Aqua brush surfaces found in ${inputPath}`)
   }
 
-  const triangles = buildTriangles(surfaces)
+  const triangles = buildTriangles([...surfaces, ...shadowSurfaces])
   computeDirectLighting(surfaces, lights, triangles, settings)
   computeBounceLighting(surfaces, triangles, settings)
 
-  const output = createLightingOutput({
+  const output = await createLightingOutput({
     inputPath,
     outputPath,
     settings,
@@ -85,7 +93,7 @@ async function main() {
   await fs.mkdir(path.dirname(outputPath), { recursive: true })
   await fs.writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8')
 
-  console.log(`Baked ${surfaces.length} surface(s), ${triangles.length} patch triangle(s), ${lights.length} light(s).`)
+  console.log(`Baked ${surfaces.length} surface(s), ${shadowSurfaces.length} prop shadow caster(s), ${triangles.length} patch triangle(s), ${lights.length} light(s).`)
   console.log(`Wrote ${path.relative(process.cwd(), outputPath)}`)
 }
 
@@ -115,6 +123,8 @@ function parseArgs(args) {
       settings.ambientIntensity = readNumber(next(), arg)
     } else if (arg === '--sun') {
       settings.sunIntensity = readNumber(next(), arg)
+    } else if (arg === '--light-scale' || arg === '--authored-light-scale') {
+      settings.authoredLightScale = readNumber(next(), arg)
     } else if (arg === '--exposure') {
       settings.exposure = readNumber(next(), arg)
     } else if (arg === '--min-light') {
@@ -125,6 +135,14 @@ function parseArgs(args) {
       settings.patchDistance = readNumber(next(), arg)
     } else if (arg === '--shadow-distance') {
       settings.shadowDistance = readNumber(next(), arg)
+    } else if (arg === '--texel-size' || arg === '--lightmap-texel-size') {
+      settings.lightmapTexelSize = readNumber(next(), arg)
+    } else if (arg === '--lightmap-size' || arg === '--max-lightmap-size') {
+      settings.lightmapMaxSize = readInteger(next(), arg)
+    } else if (arg === '--lightmap-padding') {
+      settings.lightmapPadding = readInteger(next(), arg)
+    } else if (arg === '--lightmap-bleed') {
+      settings.lightmapBleed = readInteger(next(), arg)
     } else if (arg === '--no-default-lights') {
       useDefaultLights = false
     } else if (arg.startsWith('-')) {
@@ -152,11 +170,16 @@ Options:
   --bounce-strength <value>  Indirect light multiplier. Default: ${DEFAULT_SETTINGS.bounceStrength}
   --ambient <value>          Default ambient intensity. Default: ${DEFAULT_SETTINGS.ambientIntensity}
   --sun <value>              Default sun intensity. Default: ${DEFAULT_SETTINGS.sunIntensity}
+  --light-scale <value>      Multiplier for authored non-ambient light intensities. Default: ${DEFAULT_SETTINGS.authoredLightScale}
   --exposure <value>         Final light multiplier. Default: ${DEFAULT_SETTINGS.exposure}
   --min-light <value>        Minimum final light value. Default: ${DEFAULT_SETTINGS.minLight}
   --max-light <value>        Clamp final light value. Default: ${DEFAULT_SETTINGS.maxLight}
   --patch-distance <value>   Max distance for bounce patches. Default: ${DEFAULT_SETTINGS.patchDistance}
   --shadow-distance <value>  Max directional shadow ray distance. Default: ${DEFAULT_SETTINGS.shadowDistance}
+  --texel-size <value>       World units per lightmap texel. Default: ${DEFAULT_SETTINGS.lightmapTexelSize}
+  --lightmap-size <pixels>   Max generated lightmap texture size. Default: ${DEFAULT_SETTINGS.lightmapMaxSize}
+  --lightmap-padding <px>    Empty pixels around packed charts. Default: ${DEFAULT_SETTINGS.lightmapPadding}
+  --lightmap-bleed <px>      Dilation passes for chart edge padding. Default: ${DEFAULT_SETTINGS.lightmapBleed}
   --no-default-lights        Use only authored Aqua/KHR lights from the map.
 `)
 }
@@ -171,9 +194,56 @@ function readNumber(value, option) {
   return number
 }
 
+function readInteger(value, option) {
+  const number = Math.floor(Number(value))
+
+  if (!Number.isFinite(number)) {
+    throw new Error(`${option} expects an integer`)
+  }
+
+  return number
+}
+
 function defaultOutputPath(inputPath) {
   const extension = path.extname(inputPath)
   return `${inputPath.slice(0, inputPath.length - extension.length)}.light.json`
+}
+
+function resolveExternalPath(assetPath, basePath) {
+  if (assetPath.startsWith('file://')) {
+    return fileURLToPath(assetPath)
+  }
+
+  if (assetPath.startsWith('/')) {
+    return path.resolve(__dirname, '..', '..', 'public', decodeURIComponent(assetPath.slice(1)))
+  }
+
+  if (path.isAbsolute(assetPath)) {
+    return assetPath
+  }
+
+  return path.resolve(path.dirname(basePath), decodeURIComponent(assetPath))
+}
+
+function resolvePropAssetPath(propAsset, propName, basePath) {
+  if (propName && isGenericPropLibraryAsset(propAsset)) {
+    return resolveExternalPath(`/assets/props/${cleanAssetName(propName)}.aqua_prop.json`, basePath)
+  }
+
+  return resolveExternalPath(propAsset, basePath)
+}
+
+function isGenericPropLibraryAsset(propAsset) {
+  return /(?:^|[/\\])Aqua-Engine_Props\.aqua_prop\.json$/i.test(String(propAsset || ''))
+}
+
+function cleanAssetName(name) {
+  return String(name || 'aqua_prop')
+    .trim()
+    .replace(/_aqua_prop_ref$/i, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'aqua_prop'
 }
 
 async function loadGltfDocument(inputPath) {
@@ -342,7 +412,7 @@ function collectBakeSurfaces(document, nodes) {
       continue
     }
 
-    const geometry = createRuntimeGeometry(document, entry, brushType)
+    const geometry = createBakeGeometry(createRuntimeGeometry(document, entry, brushType))
 
     if (!geometry?.getAttribute('position')) {
       continue
@@ -363,6 +433,171 @@ function collectBakeSurfaces(document, nodes) {
   }
 
   return surfaces
+}
+
+function createBakeGeometry(geometry) {
+  if (!geometry) {
+    return null
+  }
+
+  const bakeGeometry = geometry.index ? geometry.toNonIndexed() : geometry.clone()
+
+  if (!bakeGeometry.getAttribute('normal')) {
+    bakeGeometry.computeVertexNormals()
+  }
+
+  return bakeGeometry
+}
+
+async function collectPropShadowSurfaces(document, nodes, inputPath) {
+  const surfaces = []
+
+  for (const entry of nodes) {
+    const propAsset = getString(
+      entry.extras,
+      'aqua_prop_asset',
+      'aquaPropAsset',
+      'aqua_asset',
+      'aquaAsset'
+    )
+
+    if (!propAsset) {
+      continue
+    }
+
+    const propName = getPropName(entry)
+    const metadataPath = resolvePropAssetPath(propAsset, propName, inputPath)
+    let metadata = null
+
+    try {
+      metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'))
+    } catch (error) {
+      console.warn(`Skipping prop shadow caster "${entry.rawName}": failed to read ${metadataPath}. ${error.message}`)
+      continue
+    }
+
+    if (metadata?.lighting?.castsShadows === false || metadata?.castsShadows === false) {
+      continue
+    }
+
+    if (!metadata?.model) {
+      console.warn(`Skipping prop shadow caster "${entry.rawName}": ${metadataPath} has no model path.`)
+      continue
+    }
+
+    const modelPath = resolveExternalPath(metadata.model, metadataPath)
+
+    try {
+      const propDocument = await loadGltfDocument(modelPath)
+      const propNodes = collectNodes(propDocument)
+      const pivot = getPropPivot(metadata)
+      const pivotMatrix = pivot
+        ? new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z)
+        : new THREE.Matrix4()
+
+      for (const propEntry of propNodes) {
+        if (!Number.isInteger(propEntry.node.mesh)) {
+          continue
+        }
+
+        if (isCollisionHelperEntry(propEntry)) {
+          continue
+        }
+
+        const geometry = createGeometryFromMesh(propDocument, propEntry.node.mesh)
+
+        if (!geometry?.getAttribute('position')) {
+          continue
+        }
+
+        surfaces.push(createBakeSurface({
+          name: `${entry.name}_${propEntry.name}_shadow`,
+          aliases: [],
+          path: `${entry.path}/${propEntry.path}`,
+          brushType: 'prop_shadow',
+          extras: propEntry.extras,
+          geometry,
+          worldMatrix: entry.worldMatrix.clone().multiply(pivotMatrix).multiply(propEntry.worldMatrix),
+          albedo: getSurfaceAlbedo(propDocument, propEntry.node, propEntry.extras),
+        }))
+      }
+    } catch (error) {
+      console.warn(`Skipping prop shadow caster "${entry.rawName}": failed to read ${modelPath}. ${error.message}`)
+    }
+  }
+
+  return surfaces
+}
+
+function getPropName(entry) {
+  return getString(entry.extras, 'aqua_prop_name', 'aquaPropName') ||
+    cleanAssetName(entry.rawName || entry.name)
+}
+
+function getPropPivot(metadata) {
+  const pivot = vectorFromArray(metadata?.pivot?.engine)
+
+  if (pivot && !isZeroVector(pivot)) {
+    return pivot
+  }
+
+  const renderSource = metadata?.sourceObjects?.find((source) =>
+    source?.type === 'MESH' && !String(source.name || '').startsWith('brush_')
+  )
+
+  return vectorFromArray(renderSource?.location?.engine)
+}
+
+function vectorFromArray(value) {
+  if (!Array.isArray(value) || value.length < 3) {
+    return null
+  }
+
+  const x = Number(value[0])
+  const y = Number(value[1])
+  const z = Number(value[2])
+
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+    return null
+  }
+
+  return new THREE.Vector3(x, y, z)
+}
+
+function isZeroVector(vector) {
+  return Math.abs(vector.x) < 0.000001 &&
+    Math.abs(vector.y) < 0.000001 &&
+    Math.abs(vector.z) < 0.000001
+}
+
+function isCollisionHelperEntry(entry) {
+  const brushType = getString(entry.extras, 'aqua_brush_type', 'aquaBrushType')
+  const collisionKind = getCollisionKind(entry.extras)
+
+  if (!collisionKind) {
+    return false
+  }
+
+  return brushType === 'box' ||
+    brushType === 'plane' ||
+    brushType === 'ramp' ||
+    collisionKind === 'brush' ||
+    collisionKind === 'slope' ||
+    collisionKind === 'convex'
+}
+
+function getCollisionKind(userData) {
+  const kind = getString(userData, 'collisionKind', 'aqua_collision_kind', 'aquaCollisionKind')
+
+  if (!kind || kind === 'none') {
+    return null
+  }
+
+  if (kind === 'terrain_mesh') {
+    return 'triangle'
+  }
+
+  return kind
 }
 
 function createRuntimeGeometry(document, entry, brushType) {
@@ -871,16 +1106,31 @@ function collectLights(document, nodes, settings, useDefaultLights) {
   const lights = []
 
   for (const entry of nodes) {
-    const extraLight = createLightFromExtras(entry)
+    const extrasType = getString(entry.extras, 'aqua_light_type', 'aquaLightType')?.toLowerCase()
 
-    if (extraLight) {
-      lights.push(extraLight)
+    if (extrasType === 'ambient') {
+      const extraLight = createLightFromExtras(entry)
+
+      if (extraLight) {
+        lights.push(extraLight)
+      }
+
+      continue
     }
 
     const punctualLight = createLightFromPunctualExtension(document, entry)
 
     if (punctualLight) {
+      scaleAuthoredLight(punctualLight, settings)
       lights.push(punctualLight)
+      continue
+    }
+
+    const extraLight = createLightFromExtras(entry)
+
+    if (extraLight) {
+      scaleAuthoredLight(extraLight, settings)
+      lights.push(extraLight)
     }
   }
 
@@ -909,6 +1159,16 @@ function collectLights(document, nodes, settings, useDefaultLights) {
   }
 
   return lights
+}
+
+function scaleAuthoredLight(light, settings) {
+  if (!light || light.type === 'ambient') {
+    return light
+  }
+
+  light.intensity *= settings.authoredLightScale ?? 1
+
+  return light
 }
 
 function createLightFromExtras(entry) {
@@ -1162,9 +1422,14 @@ function computeBounceLighting(surfaces, triangles, settings) {
 
 function seedPatchEmission(triangles, source, settings) {
   for (const triangle of triangles) {
-    const values = source === 'direct'
-      ? triangle.indices.map((index) => triangle.surface.direct[index])
-      : triangle.indices.map((index) => source.get(triangle.surface)[index])
+    const sourceValues = source === 'direct' ? triangle.surface.direct : source.get(triangle.surface)
+
+    if (!sourceValues) {
+      triangle.emit.set(0, 0, 0)
+      continue
+    }
+
+    const values = triangle.indices.map((index) => sourceValues[index])
     const average = new THREE.Vector3()
 
     for (const value of values) {
@@ -1274,56 +1539,466 @@ function intersectRayTriangle(origin, direction, triangle) {
   return distance > 0 ? distance : Number.NaN
 }
 
-function createLightingOutput({ inputPath, outputPath, settings, lights, surfaces, triangles }) {
-  const meshes = {}
+async function createLightingOutput({ inputPath, outputPath, settings, lights, surfaces, triangles }) {
+  const outputDir = path.dirname(outputPath)
+  const lightmapDirName = getLightmapDirectoryName(outputPath)
+  const lightmapDir = path.join(outputDir, lightmapDirName)
+  const outputSurfaces = {}
+  let texelCount = 0
 
-  for (const surface of surfaces) {
-    const position = surface.geometry.getAttribute('position')
-    const colors = []
-    const min = new THREE.Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY)
-    const max = new THREE.Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY)
-    const average = new THREE.Vector3()
+  await fs.mkdir(lightmapDir, { recursive: true })
 
-    for (let i = 0; i < position.count; i += 1) {
-      const color = new THREE.Vector3()
-        .addVectors(surface.direct[i], surface.indirect[i])
-        .multiplyScalar(settings.exposure)
+  for (let surfaceIndex = 0; surfaceIndex < surfaces.length; surfaceIndex += 1) {
+    const surface = surfaces[surfaceIndex]
+    const lightmap = createSurfaceLightmap({
+      surface,
+      lights,
+      triangles,
+      settings,
+    })
+    const fileName = `${String(surfaceIndex).padStart(3, '0')}_${sanitizeFileName(surface.name)}.png`
+    const relativeImagePath = toPortablePath(path.join(lightmapDirName, fileName))
 
-      color.x = clampLight(color.x, settings)
-      color.y = clampLight(color.y, settings)
-      color.z = clampLight(color.z, settings)
+    await fs.writeFile(path.join(lightmapDir, fileName), encodePngRgba(lightmap.width, lightmap.height, lightmap.data))
+    texelCount += lightmap.width * lightmap.height
 
-      min.min(color)
-      max.max(color)
-      average.add(color)
-      colors.push(round(color.x), round(color.y), round(color.z))
-    }
-
-    average.multiplyScalar(1 / position.count)
-
-    meshes[surface.name] = {
-      vertexCount: position.count,
+    outputSurfaces[surface.name] = {
+      vertexCount: surface.geometry.getAttribute('position').count,
       aliases: surface.aliases.filter((alias) => alias !== surface.name),
-      colors,
-      average: vectorToRoundedArray(average),
-      min: vectorToRoundedArray(min),
-      max: vectorToRoundedArray(max),
+      average: vectorToRoundedArray(lightmap.average),
+      min: vectorToRoundedArray(lightmap.min),
+      max: vectorToRoundedArray(lightmap.max),
+      lightmap: {
+        image: relativeImagePath,
+        width: lightmap.width,
+        height: lightmap.height,
+        texelSize: round(lightmap.texelSize),
+        intensity: round(lightmap.intensity),
+        uv2: Array.from(lightmap.uv2, round),
+      },
     }
   }
 
   return {
-    schema: 'aqua.baked_lighting.v1',
-    source: toPortablePath(path.relative(path.dirname(outputPath), inputPath)),
+    schema: LIGHTMAP_SCHEMA,
+    source: toPortablePath(path.relative(outputDir, inputPath)),
     generatedAt: new Date().toISOString(),
     settings: serializeSettings(settings),
     stats: {
       surfaces: surfaces.length,
       triangles: triangles.length,
       lights: lights.length,
+      lightmapImages: surfaces.length,
+      lightmapTexels: texelCount,
     },
     lights: lights.map(serializeLight),
-    meshes,
+    surfaces: outputSurfaces,
   }
+}
+
+function getLightmapDirectoryName(outputPath) {
+  const fileName = path.basename(outputPath)
+  const baseName = fileName.replace(/\.light\.json$/i, '').replace(/\.json$/i, '')
+
+  return `${baseName}.lightmaps`
+}
+
+function createSurfaceLightmap({ surface, lights, triangles, settings }) {
+  const maxSize = Math.max(16, nextPowerOfTwo(settings.lightmapMaxSize || DEFAULT_SETTINGS.lightmapMaxSize))
+  const padding = Math.max(0, Math.floor(settings.lightmapPadding ?? DEFAULT_SETTINGS.lightmapPadding))
+  const bleed = Math.max(0, Math.floor(settings.lightmapBleed ?? DEFAULT_SETTINGS.lightmapBleed))
+  let texelSize = getSurfaceLightmapTexelSize(surface, settings)
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const charts = createLightmapCharts(surface, texelSize, padding, maxSize)
+    const packed = packLightmapCharts(charts, maxSize)
+
+    if (packed) {
+      return renderSurfaceLightmap({
+        surface,
+        lights,
+        triangles,
+        settings,
+        charts,
+        width: packed.width,
+        height: packed.height,
+        texelSize,
+        padding,
+        bleed,
+      })
+    }
+
+    texelSize *= 1.5
+  }
+
+  throw new Error(`Failed to pack lightmap charts for "${surface.name}" within ${maxSize}px.`)
+}
+
+function getSurfaceLightmapTexelSize(surface, settings) {
+  const value = getNumber(
+    surface.extras,
+    'aqua_lightmap_texel_size',
+    'aquaLightmapTexelSize',
+    'aqua_lightmap_resolution',
+    'aquaLightmapResolution'
+  )
+
+  return Math.max(value || settings.lightmapTexelSize || DEFAULT_SETTINGS.lightmapTexelSize, 0.01)
+}
+
+function createLightmapCharts(surface, texelSize, padding, maxSize) {
+  const charts = []
+  const position = surface.geometry.getAttribute('position')
+  const innerMaxSize = Math.max(1, maxSize - padding * 2)
+
+  for (let triangleOffset = 0; triangleOffset < position.count; triangleOffset += 3) {
+    const a = surface.worldPositions[triangleOffset]
+    const b = surface.worldPositions[triangleOffset + 1]
+    const c = surface.worldPositions[triangleOffset + 2]
+    const edgeA = new THREE.Vector3().subVectors(b, a)
+    const edgeB = new THREE.Vector3().subVectors(c, a)
+
+    if (edgeA.lengthSq() <= 1e-10 || edgeB.lengthSq() <= 1e-10) {
+      continue
+    }
+
+    const normal = new THREE.Vector3().crossVectors(edgeA, edgeB)
+
+    if (normal.lengthSq() <= 1e-10) {
+      continue
+    }
+
+    normal.normalize()
+
+    const uAxis = edgeA.clone().normalize()
+    const vAxis = new THREE.Vector3().crossVectors(normal, uAxis).normalize()
+    const p0 = { x: 0, y: 0 }
+    const p1 = { x: edgeA.length(), y: 0 }
+    const p2 = { x: edgeB.dot(uAxis), y: edgeB.dot(vAxis) }
+    const minX = Math.min(p0.x, p1.x, p2.x)
+    const maxX = Math.max(p0.x, p1.x, p2.x)
+    const minY = Math.min(p0.y, p1.y, p2.y)
+    const maxY = Math.max(p0.y, p1.y, p2.y)
+    const worldWidth = Math.max(maxX - minX, texelSize)
+    const worldHeight = Math.max(maxY - minY, texelSize)
+    const innerWidth = Math.min(Math.max(Math.ceil(worldWidth / texelSize), 1), innerMaxSize)
+    const innerHeight = Math.min(Math.max(Math.ceil(worldHeight / texelSize), 1), innerMaxSize)
+
+    charts.push({
+      triangleOffset,
+      points: [p0, p1, p2],
+      minX,
+      minY,
+      worldWidth,
+      worldHeight,
+      innerWidth,
+      innerHeight,
+      width: innerWidth + padding * 2,
+      height: innerHeight + padding * 2,
+      x: 0,
+      y: 0,
+    })
+  }
+
+  return charts
+}
+
+function packLightmapCharts(charts, maxSize) {
+  const sorted = [...charts].sort((a, b) => b.height - a.height)
+  let x = 0
+  let y = 0
+  let shelfHeight = 0
+  let usedWidth = 0
+  let usedHeight = 0
+
+  for (const chart of sorted) {
+    if (chart.width > maxSize || chart.height > maxSize) {
+      return null
+    }
+
+    if (x + chart.width > maxSize) {
+      x = 0
+      y += shelfHeight
+      shelfHeight = 0
+    }
+
+    if (y + chart.height > maxSize) {
+      return null
+    }
+
+    chart.x = x
+    chart.y = y
+    x += chart.width
+    shelfHeight = Math.max(shelfHeight, chart.height)
+    usedWidth = Math.max(usedWidth, chart.x + chart.width)
+    usedHeight = Math.max(usedHeight, chart.y + chart.height)
+  }
+
+  return {
+    width: Math.max(1, nextPowerOfTwo(usedWidth)),
+    height: Math.max(1, nextPowerOfTwo(usedHeight)),
+  }
+}
+
+function renderSurfaceLightmap({ surface, lights, triangles, settings, charts, width, height, texelSize, padding, bleed }) {
+  const data = new Uint8Array(width * height * 4)
+  const mask = new Uint8Array(width * height)
+  const uv2 = new Float32Array(surface.geometry.getAttribute('position').count * 2)
+  const min = new THREE.Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY)
+  const max = new THREE.Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY)
+  const average = new THREE.Vector3()
+  const intensity = Math.max(settings.maxLight || 1, 1)
+  let sampleCount = 0
+
+  for (const chart of charts) {
+    writeChartUvs(chart, uv2, width, height, padding)
+
+    const xStart = chart.x + padding
+    const yStart = chart.y + padding
+    const xEnd = xStart + chart.innerWidth
+    const yEnd = yStart + chart.innerHeight
+
+    for (let y = yStart; y < yEnd; y += 1) {
+      for (let x = xStart; x < xEnd; x += 1) {
+        const localX = chart.minX + ((x - xStart + 0.5) / chart.innerWidth) * chart.worldWidth
+        const localY = chart.minY + ((y - yStart + 0.5) / chart.innerHeight) * chart.worldHeight
+        const bary = getBarycentric2D(localX, localY, chart.points[0], chart.points[1], chart.points[2])
+
+        if (!bary || bary.a < -0.002 || bary.b < -0.002 || bary.c < -0.002) {
+          continue
+        }
+
+        const color = sampleLightmapTexel({
+          surface,
+          triangleOffset: chart.triangleOffset,
+          bary,
+          lights,
+          triangles,
+          settings,
+        })
+
+        writeEncodedPixel(data, mask, width, x, y, color, intensity)
+        min.min(color)
+        max.max(color)
+        average.add(color)
+        sampleCount += 1
+      }
+    }
+  }
+
+  if (sampleCount === 0) {
+    min.set(settings.minLight, settings.minLight, settings.minLight)
+    max.copy(min)
+    average.copy(min)
+  } else {
+    average.multiplyScalar(1 / sampleCount)
+  }
+
+  dilateLightmap(data, mask, width, height, bleed)
+  fillUnwrittenPixels(data, mask, width, height, average, intensity)
+
+  return {
+    data,
+    uv2,
+    width,
+    height,
+    texelSize,
+    intensity,
+    min,
+    max,
+    average,
+  }
+}
+
+function writeChartUvs(chart, uv2, width, height, padding) {
+  const xStart = chart.x + padding
+  const yStart = chart.y + padding
+
+  for (let vertex = 0; vertex < 3; vertex += 1) {
+    const point = chart.points[vertex]
+    const pixelX = xStart + ((point.x - chart.minX) / chart.worldWidth) * chart.innerWidth
+    const pixelY = yStart + ((point.y - chart.minY) / chart.worldHeight) * chart.innerHeight
+    const index = chart.triangleOffset + vertex
+
+    uv2[index * 2] = pixelX / width
+    uv2[index * 2 + 1] = pixelY / height
+  }
+}
+
+function getBarycentric2D(x, y, a, b, c) {
+  const v0x = b.x - a.x
+  const v0y = b.y - a.y
+  const v1x = c.x - a.x
+  const v1y = c.y - a.y
+  const v2x = x - a.x
+  const v2y = y - a.y
+  const den = v0x * v1y - v1x * v0y
+
+  if (Math.abs(den) <= 1e-8) {
+    return null
+  }
+
+  const bWeight = (v2x * v1y - v1x * v2y) / den
+  const cWeight = (v0x * v2y - v2x * v0y) / den
+
+  return {
+    a: 1 - bWeight - cWeight,
+    b: bWeight,
+    c: cWeight,
+  }
+}
+
+function sampleLightmapTexel({ surface, triangleOffset, bary, lights, triangles, settings }) {
+  const a = surface.worldPositions[triangleOffset]
+  const b = surface.worldPositions[triangleOffset + 1]
+  const c = surface.worldPositions[triangleOffset + 2]
+  const normalA = surface.worldNormals[triangleOffset]
+  const normalB = surface.worldNormals[triangleOffset + 1]
+  const normalC = surface.worldNormals[triangleOffset + 2]
+  const position = new THREE.Vector3()
+    .addScaledVector(a, bary.a)
+    .addScaledVector(b, bary.b)
+    .addScaledVector(c, bary.c)
+  const normal = new THREE.Vector3()
+    .addScaledVector(normalA, bary.a)
+    .addScaledVector(normalB, bary.b)
+    .addScaledVector(normalC, bary.c)
+    .normalize()
+  const color = sampleDirectLighting({
+    position,
+    normal,
+    surface,
+    lights,
+    triangles,
+    settings,
+  })
+
+  color.addScaledVector(surface.indirect[triangleOffset], bary.a)
+  color.addScaledVector(surface.indirect[triangleOffset + 1], bary.b)
+  color.addScaledVector(surface.indirect[triangleOffset + 2], bary.c)
+  color.multiplyScalar(settings.exposure)
+  color.x = clampLight(color.x, settings)
+  color.y = clampLight(color.y, settings)
+  color.z = clampLight(color.z, settings)
+
+  return color
+}
+
+function writeEncodedPixel(data, mask, width, x, y, color, intensity) {
+  const pixel = y * width + x
+  const offset = pixel * 4
+
+  data[offset] = encodeLightChannel(color.x, intensity)
+  data[offset + 1] = encodeLightChannel(color.y, intensity)
+  data[offset + 2] = encodeLightChannel(color.z, intensity)
+  data[offset + 3] = 255
+  mask[pixel] = 1
+}
+
+function encodeLightChannel(value, intensity) {
+  return Math.round(THREE.MathUtils.clamp(value / intensity, 0, 1) * 255)
+}
+
+function dilateLightmap(data, mask, width, height, passes) {
+  for (let pass = 0; pass < passes; pass += 1) {
+    const nextData = new Uint8Array(data)
+    const nextMask = new Uint8Array(mask)
+    let changed = false
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const pixel = y * width + x
+
+        if (mask[pixel]) {
+          continue
+        }
+
+        const neighbor = findWrittenNeighbor(mask, width, height, x, y)
+
+        if (neighbor === -1) {
+          continue
+        }
+
+        const targetOffset = pixel * 4
+        const sourceOffset = neighbor * 4
+
+        nextData[targetOffset] = data[sourceOffset]
+        nextData[targetOffset + 1] = data[sourceOffset + 1]
+        nextData[targetOffset + 2] = data[sourceOffset + 2]
+        nextData[targetOffset + 3] = 255
+        nextMask[pixel] = 1
+        changed = true
+      }
+    }
+
+    data.set(nextData)
+    mask.set(nextMask)
+
+    if (!changed) {
+      return
+    }
+  }
+}
+
+function findWrittenNeighbor(mask, width, height, x, y) {
+  for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+    const nextY = y + offsetY
+
+    if (nextY < 0 || nextY >= height) {
+      continue
+    }
+
+    for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+      if (offsetX === 0 && offsetY === 0) {
+        continue
+      }
+
+      const nextX = x + offsetX
+
+      if (nextX < 0 || nextX >= width) {
+        continue
+      }
+
+      const pixel = nextY * width + nextX
+
+      if (mask[pixel]) {
+        return pixel
+      }
+    }
+  }
+
+  return -1
+}
+
+function fillUnwrittenPixels(data, mask, width, height, color, intensity) {
+  const r = encodeLightChannel(color.x, intensity)
+  const g = encodeLightChannel(color.y, intensity)
+  const b = encodeLightChannel(color.z, intensity)
+
+  for (let pixel = 0; pixel < mask.length; pixel += 1) {
+    if (mask[pixel]) {
+      continue
+    }
+
+    const offset = pixel * 4
+
+    data[offset] = r
+    data[offset + 1] = g
+    data[offset + 2] = b
+    data[offset + 3] = 255
+  }
+}
+
+function nextPowerOfTwo(value) {
+  return 2 ** Math.ceil(Math.log2(Math.max(1, value)))
+}
+
+function sanitizeFileName(name) {
+  return String(name || 'surface')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'surface'
 }
 
 function clampLight(value, settings) {
@@ -1334,6 +2009,7 @@ function serializeSettings(settings) {
   return {
     ambientIntensity: settings.ambientIntensity,
     sunIntensity: settings.sunIntensity,
+    authoredLightScale: settings.authoredLightScale,
     bounces: settings.bounces,
     bounceStrength: settings.bounceStrength,
     exposure: settings.exposure,
@@ -1342,6 +2018,10 @@ function serializeSettings(settings) {
     normalBias: settings.normalBias,
     shadowDistance: settings.shadowDistance,
     patchDistance: settings.patchDistance,
+    lightmapTexelSize: settings.lightmapTexelSize,
+    lightmapMaxSize: settings.lightmapMaxSize,
+    lightmapPadding: settings.lightmapPadding,
+    lightmapBleed: settings.lightmapBleed,
   }
 }
 
@@ -1457,6 +2137,73 @@ function vectorToRoundedArray(vector) {
 
 function toPortablePath(filePath) {
   return filePath.split(path.sep).join('/')
+}
+
+function encodePngRgba(width, height, rgba) {
+  const rowLength = width * 4
+  const raw = Buffer.alloc((rowLength + 1) * height)
+
+  for (let y = 0; y < height; y += 1) {
+    const rawOffset = y * (rowLength + 1)
+    const sourceOffset = y * rowLength
+
+    raw[rawOffset] = 0
+    Buffer.from(rgba.buffer, rgba.byteOffset + sourceOffset, rowLength).copy(raw, rawOffset + 1)
+  }
+
+  const header = Buffer.alloc(13)
+
+  header.writeUInt32BE(width, 0)
+  header.writeUInt32BE(height, 4)
+  header[8] = 8
+  header[9] = 6
+  header[10] = 0
+  header[11] = 0
+  header[12] = 0
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    createPngChunk('IHDR', header),
+    createPngChunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
+    createPngChunk('IEND', Buffer.alloc(0)),
+  ])
+}
+
+function createPngChunk(type, data) {
+  const typeBuffer = Buffer.from(type)
+  const length = Buffer.alloc(4)
+  const crc = Buffer.alloc(4)
+
+  length.writeUInt32BE(data.length, 0)
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 0)
+
+  return Buffer.concat([length, typeBuffer, data, crc])
+}
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256)
+
+  for (let i = 0; i < 256; i += 1) {
+    let value = i
+
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1
+    }
+
+    table[i] = value >>> 0
+  }
+
+  return table
+})()
+
+function crc32(buffer) {
+  let crc = 0xffffffff
+
+  for (const value of buffer) {
+    crc = CRC32_TABLE[(crc ^ value) & 0xff] ^ (crc >>> 8)
+  }
+
+  return (crc ^ 0xffffffff) >>> 0
 }
 
 main().catch((error) => {

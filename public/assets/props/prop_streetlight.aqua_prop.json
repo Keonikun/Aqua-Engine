@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_streetlight",
+  "displayName": "prop_streetlight",
+  "model": "prop_streetlight.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      90.357635,
+      0.077299,
+      5.728292
+    ],
+    "engine": [
+      90.357635,
+      5.728292,
+      -0.077299
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        90.215919,
+        -2.109481,
+        5.728289
+      ],
+      "max": [
+        90.499352,
+        0.219011,
+        10.834694
+      ]
+    },
+    "engine": {
+      "min": [
+        90.215919,
+        5.728289,
+        -0.219011
+      ],
+      "max": [
+        90.499352,
+        10.834694,
+        2.109481
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_streetlight",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          90.357635,
+          0.077299,
+          5.728292
+        ],
+        "engine": [
+          90.357635,
+          5.728292,
+          -0.077299
+        ]
+      }
+    },
+    {
+      "name": "brush_box.016",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          90.357635,
+          0.077299,
+          7.616778
+        ],
+        "engine": [
+          90.357635,
+          7.616778,
+          -0.077299
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

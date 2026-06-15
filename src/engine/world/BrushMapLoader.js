@@ -1,29 +1,30 @@
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import * as THREE from 'three'
-import { bakeRuntimeLighting } from './RuntimeLightBaker.js'
+import { ResourceOwner, disposeObject3DResources } from '../assets/ResourceOwner.js'
+import { EngineConsole } from '../config/EngineConsole.js'
+import {
+  createCollisionDebugMesh,
+  createCollisionMesh,
+  createTriggerDebugMesh,
+  createTriggerVolumeMesh,
+} from '../render/DebugRenderMeshes.js'
+import { applyBakedLighting, getBakedLightingEntries } from '../render/LightmapApplier.js'
+import { createBrushMesh } from '../render/MapGeometryBuilder.js'
 
 export const DEFAULT_MAP_URL = '/assets/maps/demo_map/demo.glb'
 export const DEFAULT_LIGHTING_MODE = 'sidecar'
 
-const hiddenCollisionMaterial = new THREE.MeshBasicMaterial({ visible: false })
-const collisionBrushDebugMaterial = new THREE.MeshBasicMaterial({
-  color: '#75d3c8',
-  wireframe: true,
-  transparent: true,
-  opacity: 0.78,
-  depthWrite: false,
-})
 const fallbackPlayerStart = new THREE.Vector3(0, 0.1, 4)
-const DEFAULT_PLANE_LIGHTMAP_RESOLUTION = 1
-const MAX_PLANE_LIGHTMAP_SEGMENTS = 48
 
 export async function loadBrushMap({
   url = DEFAULT_MAP_URL,
   materials,
+  propAssetLoader = null,
   lightingUrl = inferLightingUrl(url),
-  fetchJson = fetch,
+  fetchJson = (...args) => fetch(...args),
   lightingMode = DEFAULT_LIGHTING_MODE,
   runtimeBakeSettings = {},
+  propBaseUrl = '/assets/props',
   onProgress = () => {},
 } = {}) {
   const normalizedLightingMode = normalizeLightingMode(lightingMode)
@@ -40,18 +41,39 @@ export async function loadBrushMap({
     loader.loadAsync(url),
     shouldLoadSidecar ? loadBakedLighting(lightingUrl, fetchJson) : Promise.resolve(null),
   ])
-  const renderGroup = new THREE.Group()
-  const collisionGroup = new THREE.Group()
-  const collisionDebugGroup = new THREE.Group()
+  EngineConsole.info('Map GLTF loaded', {
+    url,
+    lightingUrl,
+    lightingMode: normalizedLightingMode,
+    sidecarLighting: Boolean(sidecarLighting),
+  })
+  const resources = new ResourceOwner(`map:${url}`)
+  const renderGroup = resources.trackObject(new THREE.Group())
+  const collisionGroup = resources.trackObject(new THREE.Group())
+  const collisionDebugGroup = resources.trackObject(new THREE.Group())
+  const triggerGroup = resources.trackObject(new THREE.Group())
+  const triggerDebugGroup = resources.trackObject(new THREE.Group())
   const propRefs = []
+  const audioRefs = []
   const bakeTargets = []
+  const shadowTargets = []
   const playerStart = fallbackPlayerStart.clone()
+  let propRenderGroup = null
+  let skybox = findSkyboxRefFromGltf(gltf)
   let bakedLighting = sidecarLighting
 
+  resources.trackDisposable({
+    dispose: () => disposeObject3DResources(gltf.scene),
+  })
   renderGroup.name = 'BrushMapRender'
   collisionGroup.name = 'BrushMapCollision'
   collisionDebugGroup.name = 'BrushMapCollisionDebug'
+  triggerGroup.name = 'BrushMapTriggers'
+  triggerDebugGroup.name = 'BrushMapTriggerDebug'
   gltf.scene.updateMatrixWorld(true)
+  if (skybox) {
+    EngineConsole.info('Map skybox metadata found', { skybox })
+  }
 
   reportProgress(onProgress, {
     stage: 'map:build',
@@ -67,6 +89,21 @@ export async function loadBrushMap({
       return
     }
 
+    if (isSkyboxMarker(source)) {
+      skybox = createSkyboxRef(source) || skybox
+      return
+    }
+
+    if (isPositionalAudioSource(source)) {
+      const audioRef = createAudioRef(source, url)
+
+      if (audioRef) {
+        audioRefs.push(audioRef)
+      }
+
+      return
+    }
+
     const propAsset = getString(
       source.userData,
       'aqua_prop_asset',
@@ -76,7 +113,7 @@ export async function loadBrushMap({
     )
 
     if (propAsset) {
-      propRefs.push(createPropRef(source, propAsset, url))
+      propRefs.push(createPropRef(source, propAsset, url, propBaseUrl))
       return
     }
 
@@ -86,28 +123,59 @@ export async function loadBrushMap({
       return
     }
 
-    const brushMesh = createBrushMesh({ source, brushType, materials })
+    const material = createBrushMaterial(source, materials)
+    const userData = createBrushUserData(source.userData, brushType, url)
+    const brushMesh = createBrushMesh({ source, brushType, material, userData, resources })
 
     if (!brushMesh) {
       return
     }
 
+    if (isTriggerBrush(source, brushType)) {
+      triggerGroup.add(createTriggerVolumeMesh(brushMesh, resources))
+      triggerDebugGroup.add(createTriggerDebugMesh(brushMesh, resources))
+      return
+    }
+
     bakeTargets.push(brushMesh)
+    shadowTargets.push(brushMesh)
 
     if (isDebugCollisionBrush(brushType)) {
-      collisionDebugGroup.add(createCollisionDebugMesh(brushMesh))
+      collisionDebugGroup.add(createCollisionDebugMesh(brushMesh, resources))
     } else {
       renderGroup.add(brushMesh)
     }
 
     if (brushMesh.userData.collisionKind !== 'none') {
-      collisionGroup.add(createCollisionMesh(brushMesh))
+      collisionGroup.add(createCollisionMesh(brushMesh, resources))
     }
   })
 
+  if (propRefs.length > 0 && propAssetLoader) {
+    reportProgress(onProgress, {
+      stage: 'props:load',
+      label: 'Loading prop shadow casters',
+      progress: 0.38,
+      detail: `${propRefs.length} prop(s)`,
+    })
+
+    EngineConsole.info('Loading map prop references', { count: propRefs.length, propRefs })
+    const props = await propAssetLoader.loadInstances(propRefs)
+
+    propRenderGroup = props.renderGroup
+    renderGroup.add(props.renderGroup)
+    collisionGroup.add(props.collisionGroup)
+    resources.trackOwner(props.resources)
+    collectShadowMeshes(props.renderGroup, shadowTargets)
+    propRefs.length = 0
+  }
+
   if (normalizedLightingMode === 'runtime') {
+    const { bakeRuntimeLighting } = await import('./RuntimeLightBaker.js')
+
     bakedLighting = await bakeRuntimeLighting({
       meshes: bakeTargets,
+      shadowMeshes: shadowTargets,
       sourceScene: gltf.scene,
       settings: runtimeBakeSettings,
       onProgress: (event) => {
@@ -130,12 +198,14 @@ export async function loadBrushMap({
       stage: 'lighting:apply',
       label: 'Applying baked lighting',
       progress: 0.94,
-      detail: `${Object.keys(bakedLighting.meshes || {}).length} surface(s)`,
+      detail: `${Object.keys(getBakedLightingEntries(bakedLighting) || {}).length} surface(s)`,
     })
 
     for (const mesh of bakeTargets) {
-      applyBakedLighting(mesh, bakedLighting, materials)
+      applyBakedLighting(mesh, bakedLighting, materials, resources)
     }
+
+    applyPropSunlitMaterials(propRenderGroup, materials, bakedLighting)
   } else {
     reportProgress(onProgress, {
       stage: 'lighting:missing',
@@ -154,50 +224,216 @@ export async function loadBrushMap({
     renderGroup,
     collisionGroup,
     collisionDebugGroup,
+    triggerGroup,
+    triggerDebugGroup,
     playerStart,
     propRefs,
+    audioRefs,
+    skybox,
     source: gltf.scene,
+    resources,
   }
 }
 
-function createPropRef(source, propAsset, mapUrl) {
+function applyPropSunlitMaterials(propRenderGroup, materials, bakedLighting) {
+  const lighting = getPropSunLighting(bakedLighting)
+
+  if (!propRenderGroup || !materials?.createSunlitMaterial || !lighting) {
+    return
+  }
+
+  propRenderGroup.traverse((child) => {
+    if (!child.isMesh || !child.material) {
+      return
+    }
+
+    child.material = materials.createSunlitMaterial(child.material, lighting)
+  })
+}
+
+function getPropSunLighting(bakedLighting) {
+  const lights = Array.isArray(bakedLighting?.lights) ? bakedLighting.lights : []
+  const sun = lights.find((light) =>
+    ['directional', 'sun'].includes(String(light?.type || '').toLowerCase()) &&
+    Array.isArray(light.direction)
+  )
+
+  if (!sun) {
+    return null
+  }
+
+  const authoredAmbient = lights.find((light) => isAmbientLight(light) && !isDefaultLight(light))
+  const defaultAmbient = lights.find((light) => isAmbientLight(light) && isDefaultLight(light))
+  const ambient = authoredAmbient || defaultAmbient
+  const maxLight = Number(bakedLighting?.settings?.maxLight)
+  const fallbackAmbientIntensity = Number(bakedLighting?.settings?.ambientIntensity)
+
+  return {
+    sunDirection: sun.direction,
+    sunColor: sun.color,
+    sunIntensity: clampLightIntensity(sun.intensity, maxLight),
+    ambientColor: ambient?.color,
+    ambientIntensity: ambient
+      ? clampLightIntensity(ambient.intensity, maxLight)
+      : clampLightIntensity(fallbackAmbientIntensity, maxLight),
+  }
+}
+
+function isAmbientLight(light) {
+  return String(light?.type || '').toLowerCase() === 'ambient'
+}
+
+function isDefaultLight(light) {
+  return String(light?.name || '').toLowerCase().startsWith('default_')
+}
+
+function clampLightIntensity(intensity, maxLight) {
+  const value = Number(intensity)
+
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+
+  return Number.isFinite(maxLight) ? Math.min(value, maxLight) : value
+}
+
+function createAudioRef(source, mapUrl) {
+  const asset = getString(source.userData, 'aqua_audio_asset', 'aquaAudioAsset', 'audioAsset')
+
+  if (!asset) {
+    EngineConsole.warn('Skipping positional audio marker without aqua_audio_asset', {
+      name: source.name,
+      userData: source.userData,
+    })
+    return null
+  }
+
   source.updateWorldMatrix(true, false)
 
   return {
+    type: 'positional',
+    name: source.name || 'audio_source',
+    asset,
+    mapUrl,
+    matrix: source.matrixWorld.toArray(),
+    volume: getNumber(source.userData, 'aqua_audio_volume', 'aquaAudioVolume', 'audioVolume'),
+    range: getNumber(source.userData, 'aqua_audio_range', 'aquaAudioRange', 'audioRange'),
+    refDistance: getNumber(source.userData, 'aqua_audio_ref_distance', 'aquaAudioRefDistance', 'audioRefDistance'),
+    rolloff: getNumber(source.userData, 'aqua_audio_rolloff', 'aquaAudioRolloff', 'audioRolloff'),
+    distanceModel: getString(source.userData, 'aqua_audio_distance_model', 'aquaAudioDistanceModel', 'audioDistanceModel') || 'linear',
+    loop: getOptionalBoolean(source.userData, 'aqua_audio_loop', 'aquaAudioLoop', 'audioLoop'),
+    userData: cloneUserData(source.userData),
+  }
+}
+
+function createSkyboxRef(source) {
+  const skyboxRef = getString(
+    source.userData,
+    'aqua_skybox',
+    'aquaSkybox',
+    'aqua_skybox_asset',
+    'aquaSkyboxAsset',
+    'skybox'
+  )
+
+  if (!skyboxRef) {
+    EngineConsole.warn('Skipping skybox marker without aqua_skybox metadata', {
+      name: source.name,
+      userData: source.userData,
+    })
+    return null
+  }
+
+  return skyboxRef
+}
+
+function findSkyboxRefFromGltf(gltf) {
+  const nodes = gltf?.parser?.json?.nodes
+
+  if (!Array.isArray(nodes)) {
+    return null
+  }
+
+  for (const node of nodes) {
+    const extras = node?.extras
+
+    if (!isSkyboxNodeMetadata(node, extras)) {
+      continue
+    }
+
+    const skyboxRef = getString(
+      extras,
+      'aqua_skybox',
+      'aquaSkybox',
+      'aqua_skybox_asset',
+      'aquaSkyboxAsset',
+      'skybox'
+    )
+
+    if (skyboxRef) {
+      return skyboxRef
+    }
+  }
+
+  return null
+}
+
+function isSkyboxNodeMetadata(node, extras) {
+  const entityClass = getString(extras, 'aqua_entity', 'aquaEntity')
+
+  return entityClass === 'skybox' ||
+    String(node?.name || '').toLowerCase() === 'skybox' ||
+    Boolean(getString(extras, 'aqua_skybox', 'aquaSkybox', 'aqua_skybox_asset', 'aquaSkyboxAsset'))
+}
+
+function createPropRef(source, propAsset, mapUrl, propBaseUrl) {
+  source.updateWorldMatrix(true, false)
+
+  const propName = getString(
+    source.userData,
+    'aqua_prop_id',
+    'aquaPropId',
+    'aqua_prop_name',
+    'aquaPropName'
+  )
+
+  return {
     name: source.name || 'aqua_prop',
-    asset: resolveUrl(propAsset, mapUrl),
+    asset: resolvePropAssetUrl(propAsset, propName, mapUrl, propBaseUrl),
     matrix: source.matrixWorld.toArray(),
     userData: cloneUserData(source.userData),
   }
 }
 
-function createBrushMesh({ source, brushType, materials }) {
-  const material = createBrushMaterial(source, materials)
-  let mesh = null
-
-  if (brushType === 'terrain') {
-    mesh = createTerrainBrush(source, material)
-  } else if (brushType === 'ramp') {
-    mesh = createRampBrush(source, material)
-  } else if (brushType === 'plane') {
-    mesh = createPlaneBrush(source, material)
-  } else if (source.isMesh && source.geometry?.getAttribute('position')) {
-    mesh = new THREE.Mesh(createRenderableMeshGeometry(source), material)
-    mesh.geometry.computeVertexNormals()
-  } else {
-    mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material)
+function resolvePropAssetUrl(propAsset, propName, mapUrl, propBaseUrl) {
+  if (propName && isGenericPropLibraryAsset(propAsset)) {
+    return resolveUrl(`${String(propBaseUrl || '/assets/props').replace(/\/+$/, '')}/${cleanAssetName(propName)}.aqua_prop.json`, mapUrl)
   }
 
-  if (!mesh) {
-    return null
-  }
+  return resolveUrl(propAsset, mapUrl)
+}
 
-  mesh.name = source.name || `aqua_${brushType}`
-  ensureAoUv(mesh.geometry)
-  copyWorldTransform(source, mesh)
-  mesh.userData = createBrushUserData(source.userData, brushType)
+function isGenericPropLibraryAsset(propAsset) {
+  return /\/Aqua-Engine_Props\.aqua_prop\.json$/i.test(String(propAsset || ''))
+}
 
-  return mesh
+function cleanAssetName(name) {
+  return String(name || 'aqua_prop')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'aqua_prop'
+}
+
+function collectShadowMeshes(object, target) {
+  object?.updateMatrixWorld(true)
+  object?.traverse((child) => {
+    if (!child.isMesh || !child.geometry?.getAttribute('position')) {
+      return
+    }
+
+    target.push(child)
+  })
 }
 
 function normalizeLightingMode(lightingMode) {
@@ -222,259 +458,21 @@ function reportProgress(onProgress, event) {
   })
 }
 
-function createRampBrush(source, material) {
-  return new THREE.Mesh(createRampGeometry(), material)
-}
-
-function createPlaneBrush(source, material) {
-  return new THREE.Mesh(createPlaneBrushGeometry(source), material)
-}
-
-function createPlaneBrushGeometry(source) {
-  const scale = getSourceWorldScale(source)
-  const resolution = getNumber(source.userData, 'aqua_lightmap_resolution', 'aquaLightmapResolution') ||
-    DEFAULT_PLANE_LIGHTMAP_RESOLUTION
-  const segmentsX = getLightmapSegments(scale.x, resolution)
-  const segmentsY = getLightmapSegments(scale.y, resolution)
-  const segmentsZ = getLightmapSegments(scale.z, resolution)
-  const geometry = new THREE.BoxGeometry(1, 1, 1, segmentsX, segmentsY, segmentsZ)
-
-  geometry.computeVertexNormals()
-
-  return geometry
-}
-
-function createRenderableMeshGeometry(source) {
-  const geometry = createSubdividedFlatGeometry({
-    geometry: source.geometry,
-    userData: source.userData,
-    worldMatrix: source.matrixWorld,
-  })
-
-  return geometry || source.geometry.clone()
-}
-
-function createSubdividedFlatGeometry({ geometry, userData, worldMatrix }) {
-  const position = geometry?.getAttribute('position')
-
-  if (!position || position.count > 6) {
-    return null
-  }
-
-  const bounds = getLocalBounds(position)
-  const axes = getFlatGeometryAxes(bounds)
-
-  if (!axes) {
-    return null
-  }
-
-  const scale = getMatrixWorldScale(worldMatrix)
-  const resolution = getNumber(userData, 'aqua_lightmap_resolution', 'aquaLightmapResolution') ||
-    DEFAULT_PLANE_LIGHTMAP_RESOLUTION
-  const segmentsU = getLightmapSegments(bounds.size[axes.u] * scale.getComponent(axes.u), resolution)
-  const segmentsV = getLightmapSegments(bounds.size[axes.v] * scale.getComponent(axes.v), resolution)
-
-  if (segmentsU <= 1 && segmentsV <= 1) {
-    return null
-  }
-
-  return createFlatGridGeometry({ bounds, axes, segmentsU, segmentsV, normal: getAverageNormal(geometry, axes.flat) })
-}
-
-function createFlatGridGeometry({ bounds, axes, segmentsU, segmentsV, normal }) {
-  const positions = []
-  const normals = []
-  const uvs = []
-  const indices = []
-  const flipWinding = shouldFlipFlatGridWinding(axes, normal)
-
-  for (let row = 0; row <= segmentsV; row += 1) {
-    const vRatio = row / segmentsV
-
-    for (let column = 0; column <= segmentsU; column += 1) {
-      const uRatio = column / segmentsU
-      const point = [bounds.center[0], bounds.center[1], bounds.center[2]]
-
-      point[axes.u] = THREE.MathUtils.lerp(bounds.min[axes.u], bounds.max[axes.u], uRatio)
-      point[axes.v] = THREE.MathUtils.lerp(bounds.min[axes.v], bounds.max[axes.v], vRatio)
-      point[axes.flat] = bounds.center[axes.flat]
-
-      positions.push(point[0], point[1], point[2])
-      normals.push(normal.x, normal.y, normal.z)
-      uvs.push(uRatio, vRatio)
-    }
-  }
-
-  const columns = segmentsU + 1
-
-  for (let row = 0; row < segmentsV; row += 1) {
-    for (let column = 0; column < segmentsU; column += 1) {
-      const a = row * columns + column
-      const b = a + 1
-      const c = a + columns
-      const d = c + 1
-
-      if (flipWinding) {
-        indices.push(a, b, c, b, d, c)
-      } else {
-        indices.push(a, c, b, b, c, d)
-      }
-    }
-  }
-
-  const grid = new THREE.BufferGeometry()
-
-  grid.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  grid.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
-  grid.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
-  grid.setIndex(indices)
-
-  return grid
-}
-
-function shouldFlipFlatGridWinding(axes, normal) {
-  const uAxis = new THREE.Vector3()
-  const vAxis = new THREE.Vector3()
-
-  uAxis.setComponent(axes.u, 1)
-  vAxis.setComponent(axes.v, 1)
-
-  const defaultWindingNormal = new THREE.Vector3().crossVectors(vAxis, uAxis)
-
-  return defaultWindingNormal.dot(normal) < 0
-}
-
-function createRampGeometry() {
-  const positions = [
-    -0.5, -0.5, 0.5,
-    0.5, -0.5, 0.5,
-    -0.5, -0.5, -0.5,
-    0.5, -0.5, -0.5,
-    -0.5, 0.5, -0.5,
-    0.5, 0.5, -0.5,
-  ]
-  const indices = [
-    0, 2, 1, 1, 2, 3,
-    2, 4, 3, 3, 4, 5,
-    0, 1, 4, 1, 5, 4,
-    0, 4, 2,
-    1, 3, 5,
-  ]
-  const geometry = new THREE.BufferGeometry()
-
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  geometry.setIndex(indices)
-  geometry.computeVertexNormals()
-
-  return geometry
-}
-
-function createTerrainBrush(source, material) {
-  const segmentsX = getNumber(source.userData, 'aqua_segments_x', 'aquaSegmentsX') || 12
-  const segmentsZ = getNumber(source.userData, 'aqua_segments_z', 'aquaSegmentsZ') || 10
-  const heightMode = getString(source.userData, 'aqua_height_mode', 'aquaHeightMode') || 'demo_wave'
-
-  if (source.isMesh && source.geometry?.getAttribute('position')) {
-    const mesh = new THREE.Mesh(source.geometry.clone(), material)
-
-    mesh.geometry.computeVertexNormals()
-
-    if (isGridTerrain(source.userData)) {
-      mesh.userData.terrain = {
-        segmentsX,
-        segmentsZ,
-        maxSnapDepth: getNumber(source.userData, 'aqua_max_snap_depth', 'aquaMaxSnapDepth') || 0.65,
-      }
-    }
-
-    return mesh
-  }
-
-  const geometry = createTerrainGeometry({ segmentsX, segmentsZ, heightMode })
-  const mesh = new THREE.Mesh(geometry, material)
-
-  mesh.userData.terrain = {
-    segmentsX,
-    segmentsZ,
-    maxSnapDepth: getNumber(source.userData, 'aqua_max_snap_depth', 'aquaMaxSnapDepth') || 0.65,
-  }
-
-  return mesh
-}
-
-function createTerrainGeometry({ segmentsX, segmentsZ, heightMode }) {
-  const columns = segmentsX + 1
-  const rows = segmentsZ + 1
-  const positions = []
-  const indices = []
-
-  for (let row = 0; row < rows; row += 1) {
-    const zRatio = row / segmentsZ
-    const z = zRatio - 0.5
-
-    for (let column = 0; column < columns; column += 1) {
-      const xRatio = column / segmentsX
-      const x = xRatio - 0.5
-      positions.push(x, getTerrainHeight(xRatio, zRatio, heightMode), z)
-    }
-  }
-
-  for (let row = 0; row < segmentsZ; row += 1) {
-    for (let column = 0; column < segmentsX; column += 1) {
-      const a = row * columns + column
-      const b = a + 1
-      const c = a + columns
-      const d = c + 1
-
-      indices.push(a, c, b, b, c, d)
-    }
-  }
-
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  geometry.setIndex(indices)
-  geometry.computeVertexNormals()
-
-  return geometry
-}
-
-function getTerrainHeight(xRatio, zRatio, heightMode) {
-  if (heightMode !== 'demo_wave') {
-    return 0
-  }
-
-  return Math.sin(xRatio * Math.PI * 2.25) * 0.12 +
-    Math.cos(zRatio * Math.PI * 2) * 0.08 +
-    Math.sin((xRatio + zRatio) * Math.PI * 1.5) * 0.05
-}
-
-function createCollisionMesh(renderMesh) {
-  const collisionMesh = renderMesh.clone()
-
-  collisionMesh.geometry = renderMesh.geometry
-  collisionMesh.material = hiddenCollisionMaterial
-  collisionMesh.name = `${renderMesh.name}_collision`
-  collisionMesh.userData = cloneUserData(renderMesh.userData)
-
-  return collisionMesh
-}
-
-function createCollisionDebugMesh(renderMesh) {
-  const debugMesh = renderMesh.clone()
-
-  debugMesh.geometry = renderMesh.geometry
-  debugMesh.material = collisionBrushDebugMaterial
-  debugMesh.name = `${renderMesh.name}_debug`
-  debugMesh.userData = cloneUserData(renderMesh.userData)
-  debugMesh.renderOrder = 10
-
-  return debugMesh
-}
-
-function createBrushUserData(sourceUserData, brushType) {
+function createBrushUserData(sourceUserData, brushType, mapUrl = window.location.href) {
   const userData = cloneUserData(sourceUserData)
 
-  if (brushType === 'terrain') {
+  if (isTriggerUserData(sourceUserData, brushType)) {
+    userData.collisionKind = 'none'
+    userData.trigger = true
+    userData.triggerId = getString(sourceUserData, 'aqua_trigger_id', 'aquaTriggerId') || null
+    userData.triggerType = getString(sourceUserData, 'aqua_trigger_type', 'aquaTriggerType') || 'generic'
+    userData.triggerEvent = getString(sourceUserData, 'aqua_trigger_event', 'aquaTriggerEvent') || 'trigger'
+    userData.triggerPayload = getString(sourceUserData, 'aqua_trigger_payload', 'aquaTriggerPayload') || null
+
+    if (getString(sourceUserData, 'aqua_audio_asset', 'aquaAudioAsset', 'audioAsset')) {
+      userData.aqua_audio_base_url = mapUrl
+    }
+  } else if (brushType === 'terrain') {
     if (isGridTerrain(sourceUserData)) {
       userData.collisionKind = 'terrain'
       userData.terrain = userData.terrain || {
@@ -487,7 +485,9 @@ function createBrushUserData(sourceUserData, brushType) {
       userData.terrainMesh = true
     }
   } else if (brushType === 'mesh') {
-    userData.collisionKind = 'none'
+    userData.collisionKind = normalizeCollisionKind(
+      getString(sourceUserData, 'aqua_collision_kind', 'aquaCollisionKind') || 'none'
+    )
   } else if (brushType === 'ramp' || brushType === 'box' || brushType === 'plane') {
     userData.collisionKind = brushType === 'ramp' ? 'slope' : 'brush'
   }
@@ -495,8 +495,41 @@ function createBrushUserData(sourceUserData, brushType) {
   return userData
 }
 
+function normalizeCollisionKind(kind) {
+  if (kind === 'terrain_mesh') {
+    return 'triangle'
+  }
+
+  return kind || 'none'
+}
+
 function isDebugCollisionBrush(brushType) {
   return brushType === 'box' || brushType === 'plane' || brushType === 'ramp'
+}
+
+function isTriggerBrush(source, brushType) {
+  return isTriggerUserData(source.userData, brushType)
+}
+
+function isPositionalAudioSource(source) {
+  const audioType = getString(source.userData, 'aqua_audio_type', 'aquaAudioType', 'audioType')
+  const entityClass = getString(source.userData, 'aqua_entity', 'aquaEntity')
+
+  return audioType === 'positional' || entityClass === 'audio_source'
+}
+
+function isSkyboxMarker(source) {
+  const entityClass = getString(source.userData, 'aqua_entity', 'aquaEntity')
+
+  return entityClass === 'skybox' ||
+    String(source.name || '').toLowerCase() === 'skybox' ||
+    Boolean(getString(source.userData, 'aqua_skybox', 'aquaSkybox', 'aqua_skybox_asset', 'aquaSkyboxAsset'))
+}
+
+function isTriggerUserData(userData, brushType) {
+  return brushType === 'trigger' ||
+    getBoolean(userData, 'aqua_trigger', 'aquaTrigger') ||
+    Boolean(getString(userData, 'aqua_trigger_event', 'aquaTriggerEvent'))
 }
 
 function createBrushMaterial(source, materials) {
@@ -509,89 +542,8 @@ function createBrushMaterial(source, materials) {
   }
 
   return materials.createMaterial({
-    color: getString(source.userData, 'aqua_color', 'aquaColor') || '#7f8a8f',
+    color: getString(source.userData, 'aqua_color', 'aquaColor') || materials.fallbackMaterialColor || '#7f8a8f',
   })
-}
-
-function applyBakedLighting(mesh, bakedLighting, materials) {
-  const entry = findBakedLightingEntry(mesh, bakedLighting)
-
-  if (!entry?.colors || !mesh.geometry) {
-    return
-  }
-
-  const position = mesh.geometry.getAttribute('position')
-
-  if (!position || entry.colors.length !== position.count * 3) {
-    console.warn(
-      `Skipping baked lighting for "${mesh.name}": expected ${position ? position.count * 3 : 0} color values, got ${entry.colors.length}.`
-    )
-    return
-  }
-
-  mesh.geometry.setAttribute('color', new THREE.Float32BufferAttribute(entry.colors, 3))
-  mesh.userData.bakedLighting = {
-    source: bakedLighting.source || null,
-    schema: bakedLighting.schema,
-  }
-
-  if (materials?.createBakedMaterial) {
-    mesh.material = materials.createBakedMaterial(mesh.material)
-  }
-}
-
-function findBakedLightingEntry(mesh, bakedLighting) {
-  const meshes = bakedLighting?.meshes
-
-  if (!meshes) {
-    return null
-  }
-
-  for (const key of getBakedLightingKeys(mesh)) {
-    if (meshes[key]) {
-      return meshes[key]
-    }
-  }
-
-  for (const entry of Object.values(meshes)) {
-    if (!Array.isArray(entry.aliases)) {
-      continue
-    }
-
-    if (entry.aliases.some((alias) => getBakedLightingKeys(mesh).includes(alias))) {
-      return entry
-    }
-  }
-
-  return null
-}
-
-function getBakedLightingKeys(mesh) {
-  const keys = new Set()
-  const bakeId = getString(mesh.userData, 'aqua_bake_id', 'aquaBakeId')
-
-  if (bakeId) {
-    keys.add(bakeId)
-    keys.add(sanitizeRuntimeName(bakeId))
-  }
-
-  if (mesh.name) {
-    keys.add(mesh.name)
-    keys.add(restoreBlenderSuffixName(mesh.name))
-    keys.add(sanitizeRuntimeName(mesh.name))
-  }
-
-  return [...keys].filter(Boolean)
-}
-
-function sanitizeRuntimeName(name) {
-  return String(name).replace(/\s/g, '_').replace(/[\[\]\.:/]/g, '')
-}
-
-function restoreBlenderSuffixName(name) {
-  return String(name)
-    .replace(/_(\d{3})$/, '.$1')
-    .replace(/([^\d])(\d{3})$/, '$1.$2')
 }
 
 function getSourceMaterials(source) {
@@ -602,19 +554,6 @@ function getSourceMaterials(source) {
   const sourceMaterials = Array.isArray(source.material) ? source.material : [source.material]
 
   return sourceMaterials.filter((material) => material?.name)
-}
-
-function ensureAoUv(geometry) {
-  if (!geometry?.attributes?.uv || geometry.attributes.uv2) {
-    return
-  }
-
-  geometry.setAttribute('uv2', geometry.attributes.uv.clone())
-}
-
-function copyWorldTransform(source, target) {
-  source.updateWorldMatrix(true, false)
-  source.matrixWorld.decompose(target.position, target.quaternion, target.scale)
 }
 
 function cloneUserData(userData) {
@@ -643,99 +582,41 @@ function getNumber(userData, ...keys) {
   return null
 }
 
+function getBoolean(userData, ...keys) {
+  for (const key of keys) {
+    const value = userData?.[key]
+
+    if (typeof value === 'boolean') {
+      return value
+    }
+
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true'
+    }
+  }
+
+  return false
+}
+
+function getOptionalBoolean(userData, ...keys) {
+  for (const key of keys) {
+    const value = userData?.[key]
+
+    if (typeof value === 'boolean') {
+      return value
+    }
+
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true'
+    }
+  }
+
+  return undefined
+}
+
 function isGridTerrain(userData) {
   return Number.isInteger(getNumber(userData, 'aqua_segments_x', 'aquaSegmentsX')) &&
     Number.isInteger(getNumber(userData, 'aqua_segments_z', 'aquaSegmentsZ'))
-}
-
-function getSourceWorldScale(source) {
-  source.updateWorldMatrix(true, false)
-  return getMatrixWorldScale(source.matrixWorld)
-}
-
-function getMatrixWorldScale(matrix) {
-  const position = new THREE.Vector3()
-  const quaternion = new THREE.Quaternion()
-  const scale = new THREE.Vector3(1, 1, 1)
-
-  matrix.decompose(position, quaternion, scale)
-
-  return scale
-}
-
-function getLocalBounds(position) {
-  const min = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY]
-  const max = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY]
-
-  for (let i = 0; i < position.count; i += 1) {
-    const values = [position.getX(i), position.getY(i), position.getZ(i)]
-
-    for (let axis = 0; axis < 3; axis += 1) {
-      min[axis] = Math.min(min[axis], values[axis])
-      max[axis] = Math.max(max[axis], values[axis])
-    }
-  }
-
-  const size = [
-    max[0] - min[0],
-    max[1] - min[1],
-    max[2] - min[2],
-  ]
-  const center = [
-    (min[0] + max[0]) * 0.5,
-    (min[1] + max[1]) * 0.5,
-    (min[2] + max[2]) * 0.5,
-  ]
-
-  return { min, max, size, center }
-}
-
-function getFlatGeometryAxes(bounds) {
-  const orderedAxes = [0, 1, 2].sort((a, b) => bounds.size[a] - bounds.size[b])
-  const flat = orderedAxes[0]
-  const u = orderedAxes[2]
-  const v = orderedAxes[1]
-  const largestSize = bounds.size[u]
-
-  if (largestSize <= 0.0001 || bounds.size[v] <= 0.0001) {
-    return null
-  }
-
-  if (bounds.size[flat] > Math.max(0.001, largestSize * 0.02)) {
-    return null
-  }
-
-  return { flat, u, v }
-}
-
-function getAverageNormal(geometry, flatAxis) {
-  const normal = geometry.getAttribute('normal')
-  const average = new THREE.Vector3()
-
-  if (normal) {
-    for (let i = 0; i < normal.count; i += 1) {
-      average.x += normal.getX(i)
-      average.y += normal.getY(i)
-      average.z += normal.getZ(i)
-    }
-
-    if (average.lengthSq() > 0.000001) {
-      return average.normalize()
-    }
-  }
-
-  average.set(0, 0, 0)
-  average.setComponent(flatAxis, 1)
-
-  return average
-}
-
-function getLightmapSegments(size, resolution) {
-  if (!Number.isFinite(size) || !Number.isFinite(resolution) || resolution <= 0) {
-    return 1
-  }
-
-  return Math.min(Math.max(Math.ceil(Math.abs(size) / resolution), 1), MAX_PLANE_LIGHTMAP_SEGMENTS)
 }
 
 async function loadBakedLighting(url, fetchJson) {
@@ -748,7 +629,7 @@ async function loadBakedLighting(url, fetchJson) {
 
     if (!response.ok) {
       if (response.status !== 404) {
-        console.warn(`Failed to load baked lighting "${url}": ${response.status}`)
+          EngineConsole.warn(`Failed to load baked lighting "${url}": ${response.status}`)
       }
 
       return null
@@ -756,9 +637,15 @@ async function loadBakedLighting(url, fetchJson) {
 
     const lighting = await response.json()
 
-    return lighting?.schema === 'aqua.baked_lighting.v1' ? lighting : null
+    if (lighting?.schema === 'aqua.baked_lighting.v1' || lighting?.schema === 'aqua.lightmap.v2') {
+      lighting.url = url
+      lighting.sourceUrl = url
+      return lighting
+    }
+
+    return null
   } catch (error) {
-    console.warn(`Failed to load baked lighting "${url}".`, error)
+    EngineConsole.error(`Failed to load baked lighting "${url}"`, error)
     return null
   }
 }
@@ -777,5 +664,5 @@ function inferLightingUrl(url) {
 }
 
 function resolveUrl(url, baseUrl = window.location.href) {
-  return new URL(url, baseUrl).toString()
+  return new URL(url, new URL(baseUrl || window.location.href, window.location.href)).toString()
 }

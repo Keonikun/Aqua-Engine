@@ -5,6 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "assets:sync": "python tools/asset_pipeline.py sync",
+    "assets:validate": "python tools/asset_pipeline.py validate",
+    "assets:import-props": "python tools/asset_pipeline.py import-props",
+    "assets:import-textures": "python tools/asset_pipeline.py import-textures",
+    "assets:import-audio": "python tools/asset_pipeline.py import-audio",
+    "assets:import-skybox": "python tools/asset_pipeline.py import-skybox",
     "bake:lights": "node tools/mapcompiler/bakeLighting.js",
     "tools:install": "python -m pip install -r tools/requirements.txt",
     "textures:variants": "python tools/texture_variants.py",

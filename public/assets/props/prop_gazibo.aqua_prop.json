@@ -1,0 +1,69 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_gazibo",
+  "displayName": "prop_gazibo",
+  "model": "prop_gazibo.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      83.675446,
+      -0.183403,
+      5.669254
+    ],
+    "engine": [
+      83.675446,
+      5.669254,
+      0.183403
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        81.765465,
+        -2.388858,
+        5.669254
+      ],
+      "max": [
+        85.585426,
+        2.022053,
+        13.113298
+      ]
+    },
+    "engine": {
+      "min": [
+        81.765465,
+        5.669254,
+        -2.022053
+      ],
+      "max": [
+        85.585426,
+        13.113298,
+        2.388858
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_gazibo",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          83.675446,
+          -0.183403,
+          5.669254
+        ],
+        "engine": [
+          83.675446,
+          5.669254,
+          0.183403
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

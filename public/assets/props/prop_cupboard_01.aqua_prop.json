@@ -1,0 +1,85 @@
+{
+  "schema": "aqua.prop.v1",
+  "name": "prop_cupboard_01",
+  "displayName": "prop_cupboard_01",
+  "model": "prop_cupboard_01.glb",
+  "static": true,
+  "collision": {
+    "type": "authored",
+    "source": "aqua_collision_kind",
+    "meshCount": 1
+  },
+  "pivot": {
+    "blender": [
+      68.192963,
+      1e-06,
+      0.0
+    ],
+    "engine": [
+      68.192963,
+      0.0,
+      -1e-06
+    ]
+  },
+  "bounds": {
+    "blender": {
+      "min": [
+        67.890381,
+        -0.302584,
+        0.0
+      ],
+      "max": [
+        68.502579,
+        0.302585,
+        1.981707
+      ]
+    },
+    "engine": {
+      "min": [
+        67.890381,
+        0.0,
+        -0.302585
+      ],
+      "max": [
+        68.502579,
+        1.981707,
+        0.302584
+      ]
+    }
+  },
+  "sourceObjects": [
+    {
+      "name": "prop_cupboard_01",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          68.192963,
+          1e-06,
+          0.0
+        ],
+        "engine": [
+          68.192963,
+          0.0,
+          -1e-06
+        ]
+      }
+    },
+    {
+      "name": "brush_box.009",
+      "type": "MESH",
+      "location": {
+        "blender": [
+          68.192963,
+          1e-06,
+          0.990853
+        ],
+        "engine": [
+          68.192963,
+          0.990853,
+          -1e-06
+        ]
+      }
+    }
+  ],
+  "tags": []
+}
